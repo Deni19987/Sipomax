@@ -7,8 +7,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2, Lock, Mail } from "lucide-react";
 import { SipomaxLogo } from "@/components/SipomaxLogo";
+import { SipomaxWordmark } from "@/components/shop/ShopShell";
 
 export const Route = createFileRoute("/login")({
   ssr: false,
@@ -31,6 +32,16 @@ const _capturedRefreshToken = _hash.get("refresh_token") ?? null;
 const _hasCode =
   typeof window !== "undefined" && new URLSearchParams(window.location.search).has("code");
 
+// Set a one-shot flag so the home page tags its red header with the shared
+// `brand-hero` view-transition-name — the login hero then morphs into place.
+function armBrandHeroMorph() {
+  try {
+    sessionStorage.setItem("sipomax:brandHeroMorph", "1");
+  } catch {
+    /* sessionStorage unavailable — animation simply doesn't play */
+  }
+}
+
 function decodeJWTEmail(token: string): string | null {
   try {
     const payload = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
@@ -40,7 +51,14 @@ function decodeJWTEmail(token: string): string | null {
   }
 }
 
-type Phase = "checking" | "login" | "forgot" | "forgot-sent" | "set-password" | "reset-password";
+type Phase =
+  | "checking"
+  | "login"
+  | "signup"
+  | "forgot"
+  | "forgot-sent"
+  | "set-password"
+  | "reset-password";
 
 function LoginPage() {
   useScrollTopOnMount();
@@ -48,13 +66,14 @@ function LoginPage() {
 
   const capturedTypeRef = useRef(_capturedType);
   // Tracks whether PASSWORD_RECOVERY auth event has been handled so the normal
-  // init() doesn't navigate to /dashboard over the top of the reset form.
+  // init() doesn't navigate to the app over the top of the reset form.
   const recoveryHandledRef = useRef(false);
 
   const [phase, setPhase] = useState<Phase>("checking");
   const [email, setEmail] = useState("");
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -62,9 +81,14 @@ function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
 
+  // Sign-up form
+  const [signupEmail, setSignupEmail] = useState("");
+  const [signupPassword, setSignupPassword] = useState("");
+  const [signupConfirm, setSignupConfirm] = useState("");
+  const [signupError, setSignupError] = useState<string | null>(null);
+
   // PASSWORD_RECOVERY fires when Supabase exchanges the ?code= param from the
-  // reset email (PKCE flow). We must handle it here before init() can navigate
-  // to /dashboard.
+  // reset email (PKCE flow). We must handle it here before init() can navigate.
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "PASSWORD_RECOVERY") {
@@ -129,9 +153,6 @@ function LoginPage() {
       const type = capturedTypeRef.current;
 
       // Recovery via the implicit hash flow (#access_token=...&type=recovery).
-      // Supabase's email templates commonly use this instead of PKCE ?code=.
-      // We captured the tokens at module load before Supabase cleared the hash,
-      // so apply them here and show the reset form — even if already logged in.
       if (type === "recovery") {
         recoveryHandledRef.current = true;
         if (_capturedAccessToken && _capturedRefreshToken) {
@@ -171,11 +192,11 @@ function LoginPage() {
         return;
       }
 
-      // Normal flow — don't navigate if a ?code= is present (PKCE recovery landing)
-      // or if PASSWORD_RECOVERY has already been handled.
+      // Normal flow — don't navigate if a ?code= is present (PKCE recovery
+      // landing) or if PASSWORD_RECOVERY has already been handled.
       if (_hasCode || recoveryHandledRef.current) return;
       if (session) {
-        navigate({ to: "/dashboard", viewTransition: false });
+        navigate({ to: "/" });
       } else {
         setPhase("login");
       }
@@ -195,12 +216,8 @@ function LoginPage() {
         password: loginPassword,
       });
       if (error) throw error;
-      // No view transition across the auth boundary: startViewTransition would
-      // freeze the frame while _authenticated's beforeLoad (a network getUser)
-      // and the dashboard's data load run, showing a blank / mis-positioned
-      // snapshot until a reflow. A plain swap lets the dashboard render its own
-      // loading state immediately.
-      navigate({ to: "/dashboard", viewTransition: false });
+      armBrandHeroMorph();
+      navigate({ to: "/", viewTransition: true });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "";
       const isCredError =
@@ -217,11 +234,62 @@ function LoginPage() {
     }
   }
 
+  async function handleGoogle() {
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: `${window.location.origin}/` },
+      });
+      // On success the browser redirects to Google; nothing more runs here.
+      if (error) throw error;
+    } catch (err: unknown) {
+      toast.error(
+        err instanceof Error ? err.message : "Kunde inte logga in med Google just nu.",
+      );
+      setLoading(false);
+    }
+  }
+
+  async function handleSignup(e: React.FormEvent) {
+    e.preventDefault();
+    setSignupError(null);
+    if (signupPassword !== signupConfirm) {
+      setSignupError("Lösenorden matchar inte.");
+      return;
+    }
+    if (signupPassword.length < 8) {
+      setSignupError("Lösenordet måste vara minst 8 tecken.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: signupEmail.trim(),
+        password: signupPassword,
+        options: { emailRedirectTo: `${window.location.origin}/login` },
+      });
+      if (error) throw error;
+      if (data.session) {
+        // Email confirmation disabled → the user is signed in immediately.
+        armBrandHeroMorph();
+        navigate({ to: "/", viewTransition: true });
+      } else {
+        toast.success("Konto skapat! Kolla din e-post för att bekräfta adressen.");
+        setLoginEmail(signupEmail.trim());
+        setPhase("login");
+      }
+    } catch (err: unknown) {
+      setSignupError(err instanceof Error ? err.message : "Kunde inte skapa konto");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function handleForgot(e: React.FormEvent) {
     e.preventDefault();
 
     // Client-side rate limit: Supabase allows 2 reset emails per hour.
-    // Track timestamps in localStorage and block the 3rd+ attempt locally.
     const RESET_KEY = "pw_reset_attempts";
     const ONE_HOUR = 60 * 60 * 1000;
     const now = Date.now();
@@ -256,7 +324,6 @@ function LoginPage() {
           : msg || "Kunde inte skicka återställningslänk");
         return;
       }
-      // Record successful send
       attempts.push(now);
       localStorage.setItem(RESET_KEY, JSON.stringify(attempts));
       setPhase("forgot-sent");
@@ -280,7 +347,7 @@ function LoginPage() {
     try {
       const { error } = await supabase.auth.updateUser({ password: newPassword });
       if (error) throw error;
-      window.location.href = "/dashboard";
+      window.location.href = "/";
     } catch (err: unknown) {
       setPasswordError(err instanceof Error ? err.message : "Kunde inte spara lösenordet");
     } finally {
@@ -288,6 +355,181 @@ function LoginPage() {
     }
   }
 
+  // ------- Branded screens: sign in + sign up share the red hero -------------
+  if (phase === "login" || phase === "signup") {
+    return (
+      <div className="flex min-h-screen flex-col bg-background">
+        <BrandHero />
+
+        {phase === "login" ? (
+          <div className="flex flex-1 flex-col px-6 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-1">
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">
+              Välkommen tillbaka!
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">Logga in för att fortsätta.</p>
+
+            <form onSubmit={handleLogin} className="mt-6 space-y-3">
+              <Field
+                icon={<Mail className="h-5 w-5 text-muted-foreground" />}
+                invalid={!!loginError}
+              >
+                <input
+                  type="email"
+                  required
+                  autoComplete="email"
+                  placeholder="E-postadress"
+                  value={loginEmail}
+                  onChange={(e) => { setLoginEmail(e.target.value); setLoginError(null); }}
+                  className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                />
+              </Field>
+
+              <Field
+                icon={<Lock className="h-5 w-5 text-muted-foreground" />}
+                invalid={!!loginError}
+              >
+                <input
+                  type={showPassword ? "text" : "password"}
+                  required
+                  minLength={8}
+                  autoComplete="current-password"
+                  placeholder="Lösenord"
+                  value={loginPassword}
+                  onChange={(e) => { setLoginPassword(e.target.value); setLoginError(null); }}
+                  className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? "Dölj lösenord" : "Visa lösenord"}
+                  className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
+              </Field>
+
+              {loginError && <p className="text-sm text-destructive">{loginError}</p>}
+
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => { setForgotEmail(loginEmail); setPhase("forgot"); }}
+                  className="text-sm font-semibold text-primary hover:underline"
+                >
+                  Glömt lösenord?
+                </button>
+              </div>
+
+              <PrimaryButton loading={loading}>Logga in</PrimaryButton>
+            </form>
+
+            <Divider>eller fortsätt med</Divider>
+
+            <button
+              type="button"
+              onClick={handleGoogle}
+              disabled={loading}
+              className="flex w-full items-center justify-center gap-3 rounded-2xl border border-border bg-card py-3.5 text-sm font-semibold text-foreground transition active:scale-[0.99] disabled:opacity-70"
+            >
+              <GoogleIcon className="h-5 w-5" /> Fortsätt med Google
+            </button>
+
+            <p className="mt-6 text-center text-sm text-muted-foreground">
+              Har du inget konto?{" "}
+              <button
+                type="button"
+                onClick={() => { setSignupError(null); setPhase("signup"); }}
+                className="font-bold text-primary hover:underline"
+              >
+                Skapa konto
+              </button>
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-1 flex-col px-6 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-1">
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">Skapa konto</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Registrera dig för att beställa och följa dina ordrar.
+            </p>
+
+            <form onSubmit={handleSignup} className="mt-6 space-y-3">
+              <Field
+                icon={<Mail className="h-5 w-5 text-muted-foreground" />}
+                invalid={!!signupError}
+              >
+                <input
+                  type="email"
+                  required
+                  autoComplete="email"
+                  placeholder="E-postadress"
+                  value={signupEmail}
+                  onChange={(e) => { setSignupEmail(e.target.value); setSignupError(null); }}
+                  className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                />
+              </Field>
+
+              <Field
+                icon={<Lock className="h-5 w-5 text-muted-foreground" />}
+                invalid={!!signupError}
+              >
+                <input
+                  type={showPassword ? "text" : "password"}
+                  required
+                  minLength={8}
+                  autoComplete="new-password"
+                  placeholder="Lösenord (minst 8 tecken)"
+                  value={signupPassword}
+                  onChange={(e) => { setSignupPassword(e.target.value); setSignupError(null); }}
+                  className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? "Dölj lösenord" : "Visa lösenord"}
+                  className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
+              </Field>
+
+              <Field
+                icon={<Lock className="h-5 w-5 text-muted-foreground" />}
+                invalid={!!signupError}
+              >
+                <input
+                  type={showPassword ? "text" : "password"}
+                  required
+                  minLength={8}
+                  autoComplete="new-password"
+                  placeholder="Bekräfta lösenord"
+                  value={signupConfirm}
+                  onChange={(e) => { setSignupConfirm(e.target.value); setSignupError(null); }}
+                  className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                />
+              </Field>
+
+              {signupError && <p className="text-sm text-destructive">{signupError}</p>}
+
+              <PrimaryButton loading={loading}>Skapa konto</PrimaryButton>
+            </form>
+
+            <p className="mt-6 text-center text-sm text-muted-foreground">
+              Har du redan ett konto?{" "}
+              <button
+                type="button"
+                onClick={() => { setLoginError(null); setPhase("login"); }}
+                className="font-bold text-primary hover:underline"
+              >
+                Logga in
+              </button>
+            </p>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ------- Utility screens: checking / forgot / reset -----------------------
   const subtitleMap: Partial<Record<Phase, string>> = {
     "set-password": "Aktivera ditt konto",
     "reset-password": "Återställ lösenord",
@@ -296,18 +538,12 @@ function LoginPage() {
   };
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center bg-background px-4 py-10 overflow-hidden">
-      {/* Brand backdrop */}
-      <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
-        <div className="absolute left-1/2 top-[-12%] h-72 w-72 -translate-x-1/2 rounded-full bg-primary/15 blur-3xl" />
-        <div className="absolute bottom-[-15%] right-[-10%] h-64 w-64 rounded-full bg-primary/10 blur-3xl" />
-      </div>
-
+    <div className="min-h-screen flex items-center justify-center bg-background px-4 py-10">
       <div className="w-full max-w-sm space-y-8">
         <div className="text-center">
-          <SipomaxLogo className="h-16 w-16 mb-4 mx-auto drop-shadow-md" />
+          <SipomaxLogo className="mx-auto mb-4 h-14 w-14 drop-shadow-md" />
           <h1 className="text-2xl font-semibold tracking-tight">Sipomax</h1>
-          <p className="text-sm text-muted-foreground mt-1.5">
+          <p className="mt-1.5 text-sm text-muted-foreground">
             {subtitleMap[phase] ?? "Logga in för att hantera dina jobb"}
           </p>
         </div>
@@ -316,60 +552,6 @@ function LoginPage() {
           <Card>
             <CardContent className="flex items-center justify-center py-10">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-            </CardContent>
-          </Card>
-        )}
-
-        {phase === "login" && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Logga in</CardTitle>
-              <CardDescription>Välkommen tillbaka</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleLogin} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email">E-post</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    required
-                    value={loginEmail}
-                    aria-invalid={!!loginError}
-                    className={loginError ? "border-destructive focus-visible:ring-destructive" : ""}
-                    onChange={(e) => { setLoginEmail(e.target.value); setLoginError(null); }}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="password">Lösenord</Label>
-                    <button
-                      type="button"
-                      onClick={() => { setForgotEmail(loginEmail); setPhase("forgot"); }}
-                      className="text-xs text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
-                    >
-                      Glömt lösenord?
-                    </button>
-                  </div>
-                  <Input
-                    id="password"
-                    type="password"
-                    required
-                    minLength={8}
-                    value={loginPassword}
-                    aria-invalid={!!loginError}
-                    className={loginError ? "border-destructive focus-visible:ring-destructive" : ""}
-                    onChange={(e) => { setLoginPassword(e.target.value); setLoginError(null); }}
-                  />
-                </div>
-                {loginError && (
-                  <p className="text-sm text-destructive">{loginError}</p>
-                )}
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-                  Logga in
-                </Button>
-              </form>
             </CardContent>
           </Card>
         )}
@@ -473,11 +655,112 @@ function LoginPage() {
             </CardContent>
           </Card>
         )}
-
-        <p className="text-center text-xs text-muted-foreground/70">
-          © {new Date().getFullYear()} Sipomax
-        </p>
       </div>
     </div>
+  );
+}
+
+/**
+ * The red brand panel at the top of the sign-in / sign-up screens.
+ * Carries the shared `brand-hero` view-transition-name: on a successful login
+ * we navigate to "/", where the home page's red header claims the same name,
+ * so the browser morphs this panel into its final position.
+ */
+function BrandHero() {
+  return (
+    <div
+      className="relative overflow-hidden bg-gradient-to-b from-primary via-primary to-red-800 px-6 pb-16 pt-[calc(env(safe-area-inset-top)+4rem)] text-center"
+      style={{ viewTransitionName: "brand-hero" }}
+    >
+      <SipomaxWordmark className="text-4xl tracking-[0.3em]" />
+      <p className="mx-auto mt-4 max-w-[15rem] text-sm leading-relaxed text-primary-foreground/85">
+        Professionella produkter.
+        <br />
+        Enklare vardag.
+      </p>
+
+      {/* White curve blending the red panel into the form area below. */}
+      <svg
+        className="pointer-events-none absolute inset-x-0 bottom-[-1px] h-10 w-full text-background"
+        viewBox="0 0 375 40"
+        preserveAspectRatio="none"
+        aria-hidden
+      >
+        <path d="M0 8 Q187.5 44 375 8 L375 40 L0 40 Z" fill="currentColor" />
+      </svg>
+    </div>
+  );
+}
+
+function Field({
+  icon,
+  invalid,
+  children,
+}: {
+  icon: React.ReactNode;
+  invalid?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className={`flex items-center gap-3 rounded-2xl border bg-card px-4 py-3.5 transition-colors focus-within:border-primary ${
+        invalid ? "border-destructive" : "border-border"
+      }`}
+    >
+      {icon}
+      {children}
+    </div>
+  );
+}
+
+function PrimaryButton({
+  loading,
+  children,
+}: {
+  loading?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="submit"
+      disabled={loading}
+      className="mt-1 flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-3.5 text-base font-bold text-primary-foreground shadow-lg shadow-primary/30 transition active:scale-[0.99] disabled:opacity-70"
+    >
+      {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : null}
+      {children}
+    </button>
+  );
+}
+
+function Divider({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="my-5 flex items-center gap-3">
+      <span className="h-px flex-1 bg-border" />
+      <span className="whitespace-nowrap text-xs text-muted-foreground">{children}</span>
+      <span className="h-px flex-1 bg-border" />
+    </div>
+  );
+}
+
+function GoogleIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" aria-hidden xmlns="http://www.w3.org/2000/svg">
+      <path
+        fill="#4285F4"
+        d="M23.52 12.27c0-.79-.07-1.54-.2-2.27H12v4.51h6.47a5.53 5.53 0 0 1-2.4 3.63v3h3.88c2.27-2.09 3.57-5.17 3.57-8.87Z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 24c3.24 0 5.96-1.08 7.95-2.91l-3.88-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96H1.29v3.09A12 12 0 0 0 12 24Z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M5.27 14.29a7.2 7.2 0 0 1 0-4.58V6.62H1.29a12 12 0 0 0 0 10.76l3.98-3.09Z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.44-3.44C17.95 1.19 15.23 0 12 0A12 12 0 0 0 1.29 6.62l3.98 3.09C6.22 6.86 8.87 4.75 12 4.75Z"
+      />
+    </svg>
   );
 }
