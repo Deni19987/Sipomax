@@ -60,7 +60,7 @@ function AccountPage() {
                 onClick={async () => {
                   await supabase.auth.signOut();
                   toast.success("Du är utloggad");
-                  navigate({ to: "/" });
+                  navigate({ to: "/login", viewTransition: false });
                 }}
                 className="mt-4 flex w-full items-center justify-center gap-2 rounded-full border border-border py-2.5 text-sm font-semibold text-foreground"
               >

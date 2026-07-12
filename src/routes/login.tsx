@@ -234,18 +234,21 @@ function LoginPage() {
     }
   }
 
-  async function handleGoogle() {
+  async function handleOAuth(provider: "google" | "apple") {
+    // Remember to morph the brand hero once we land back on the home page.
+    armBrandHeroMorph();
     setLoading(true);
     try {
       const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
+        provider,
         options: { redirectTo: `${window.location.origin}/` },
       });
-      // On success the browser redirects to Google; nothing more runs here.
+      // On success the browser redirects to the provider; nothing more runs here.
       if (error) throw error;
     } catch (err: unknown) {
+      const name = provider === "google" ? "Google" : "Apple";
       toast.error(
-        err instanceof Error ? err.message : "Kunde inte logga in med Google just nu.",
+        err instanceof Error ? err.message : `Kunde inte logga in med ${name} just nu.`,
       );
       setLoading(false);
     }
@@ -358,7 +361,8 @@ function LoginPage() {
   // ------- Branded screens: sign in + sign up share the red hero -------------
   if (phase === "login" || phase === "signup") {
     return (
-      <div className="flex min-h-screen flex-col bg-background">
+      <div className="min-h-screen bg-neutral-100">
+       <div className="relative mx-auto flex min-h-screen w-full max-w-md flex-col bg-background shadow-xl">
         <BrandHero />
 
         {phase === "login" ? (
@@ -425,14 +429,7 @@ function LoginPage() {
 
             <Divider>eller fortsätt med</Divider>
 
-            <button
-              type="button"
-              onClick={handleGoogle}
-              disabled={loading}
-              className="flex w-full items-center justify-center gap-3 rounded-2xl border border-border bg-card py-3.5 text-sm font-semibold text-foreground transition active:scale-[0.99] disabled:opacity-70"
-            >
-              <GoogleIcon className="h-5 w-5" /> Fortsätt med Google
-            </button>
+            <OAuthButtons onOAuth={handleOAuth} loading={loading} />
 
             <p className="mt-6 text-center text-sm text-muted-foreground">
               Har du inget konto?{" "}
@@ -513,6 +510,10 @@ function LoginPage() {
               <PrimaryButton loading={loading}>Skapa konto</PrimaryButton>
             </form>
 
+            <Divider>eller registrera med</Divider>
+
+            <OAuthButtons onOAuth={handleOAuth} loading={loading} />
+
             <p className="mt-6 text-center text-sm text-muted-foreground">
               Har du redan ett konto?{" "}
               <button
@@ -525,6 +526,7 @@ function LoginPage() {
             </p>
           </div>
         )}
+       </div>
       </div>
     );
   }
@@ -739,6 +741,35 @@ function Divider({ children }: { children: React.ReactNode }) {
       <span className="whitespace-nowrap text-xs text-muted-foreground">{children}</span>
       <span className="h-px flex-1 bg-border" />
     </div>
+  );
+}
+
+function OAuthButtons({
+  onOAuth,
+  loading,
+}: {
+  onOAuth: (provider: "google" | "apple") => void;
+  loading?: boolean;
+}) {
+  const base =
+    "flex w-full items-center justify-center gap-3 rounded-2xl border border-border bg-card py-3.5 text-sm font-semibold text-foreground transition active:scale-[0.99] disabled:opacity-70";
+  return (
+    <div className="space-y-3">
+      <button type="button" onClick={() => onOAuth("google")} disabled={loading} className={base}>
+        <GoogleIcon className="h-5 w-5" /> Fortsätt med Google
+      </button>
+      <button type="button" onClick={() => onOAuth("apple")} disabled={loading} className={base}>
+        <AppleIcon className="h-5 w-5" /> Fortsätt med Apple
+      </button>
+    </div>
+  );
+}
+
+function AppleIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden xmlns="http://www.w3.org/2000/svg">
+      <path d="M17.05 12.54c-.02-2.02 1.65-2.99 1.73-3.04-.94-1.38-2.41-1.57-2.93-1.59-1.25-.13-2.44.73-3.07.73-.63 0-1.61-.71-2.65-.69-1.36.02-2.62.79-3.32 2.01-1.42 2.46-.36 6.1 1.02 8.09.67.98 1.47 2.08 2.52 2.04 1.01-.04 1.39-.65 2.61-.65 1.22 0 1.56.65 2.63.63 1.09-.02 1.78-1 2.45-1.98.77-1.13 1.09-2.22 1.11-2.28-.02-.01-2.13-.82-2.15-3.25ZM15.03 6.4c.56-.68.94-1.62.83-2.56-.81.03-1.79.54-2.37 1.22-.52.6-.97 1.56-.85 2.48.9.07 1.83-.46 2.39-1.14Z" />
+    </svg>
   );
 }
 
