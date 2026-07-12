@@ -9,10 +9,16 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as VarukorgRouteImport } from './routes/varukorg'
+import { Route as ProdukterRouteImport } from './routes/produkter'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as KontoRouteImport } from './routes/konto'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as BestallningarIndexRouteImport } from './routes/bestallningar.index'
+import { Route as ProduktIdRouteImport } from './routes/produkt.$id'
 import { Route as CTokenRouteImport } from './routes/c.$token'
+import { Route as BestallningarIdRouteImport } from './routes/bestallningar.$id'
 import { Route as BTokenRouteImport } from './routes/b.$token'
 import { Route as ApiPushTestRouteImport } from './routes/api/push-test'
 import { Route as ApiGmailDiagnosticRouteImport } from './routes/api/gmail-diagnostic'
@@ -44,9 +50,24 @@ import { Route as ApiPublicFortnoxCallbackRouteImport } from './routes/api/publi
 import { Route as AuthenticatedJobsIdInvoiceRouteImport } from './routes/_authenticated/jobs.$id.invoice'
 import { Route as AuthenticatedJobsIdUpdatesUpdateIdRouteImport } from './routes/_authenticated/jobs.$id.updates.$updateId'
 
+const VarukorgRoute = VarukorgRouteImport.update({
+  id: '/varukorg',
+  path: '/varukorg',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProdukterRoute = ProdukterRouteImport.update({
+  id: '/produkter',
+  path: '/produkter',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const KontoRoute = KontoRouteImport.update({
+  id: '/konto',
+  path: '/konto',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedRoute = AuthenticatedRouteImport.update({
@@ -58,9 +79,24 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BestallningarIndexRoute = BestallningarIndexRouteImport.update({
+  id: '/bestallningar/',
+  path: '/bestallningar/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProduktIdRoute = ProduktIdRouteImport.update({
+  id: '/produkt/$id',
+  path: '/produkt/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CTokenRoute = CTokenRouteImport.update({
   id: '/c/$token',
   path: '/c/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BestallningarIdRoute = BestallningarIdRouteImport.update({
+  id: '/bestallningar/$id',
+  path: '/bestallningar/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BTokenRoute = BTokenRouteImport.update({
@@ -229,7 +265,10 @@ const AuthenticatedJobsIdUpdatesUpdateIdRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/konto': typeof KontoRoute
   '/login': typeof LoginRoute
+  '/produkter': typeof ProdukterRoute
+  '/varukorg': typeof VarukorgRoute
   '/archived': typeof AuthenticatedArchivedRoute
   '/campaigns': typeof AuthenticatedCampaignsRoute
   '/customers': typeof AuthenticatedCustomersRoute
@@ -245,7 +284,10 @@ export interface FileRoutesByFullPath {
   '/api/gmail-diagnostic': typeof ApiGmailDiagnosticRoute
   '/api/push-test': typeof ApiPushTestRoute
   '/b/$token': typeof BTokenRoute
+  '/bestallningar/$id': typeof BestallningarIdRoute
   '/c/$token': typeof CTokenRouteWithChildren
+  '/produkt/$id': typeof ProduktIdRoute
+  '/bestallningar/': typeof BestallningarIndexRoute
   '/jobs/$id': typeof AuthenticatedJobsIdRouteWithChildren
   '/api/public/client-log': typeof ApiPublicClientLogRoute
   '/api/public/invoice-pdf': typeof ApiPublicInvoicePdfRoute
@@ -264,7 +306,10 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/konto': typeof KontoRoute
   '/login': typeof LoginRoute
+  '/produkter': typeof ProdukterRoute
+  '/varukorg': typeof VarukorgRoute
   '/archived': typeof AuthenticatedArchivedRoute
   '/campaigns': typeof AuthenticatedCampaignsRoute
   '/customers': typeof AuthenticatedCustomersRoute
@@ -280,7 +325,10 @@ export interface FileRoutesByTo {
   '/api/gmail-diagnostic': typeof ApiGmailDiagnosticRoute
   '/api/push-test': typeof ApiPushTestRoute
   '/b/$token': typeof BTokenRoute
+  '/bestallningar/$id': typeof BestallningarIdRoute
   '/c/$token': typeof CTokenRouteWithChildren
+  '/produkt/$id': typeof ProduktIdRoute
+  '/bestallningar': typeof BestallningarIndexRoute
   '/jobs/$id': typeof AuthenticatedJobsIdRouteWithChildren
   '/api/public/client-log': typeof ApiPublicClientLogRoute
   '/api/public/invoice-pdf': typeof ApiPublicInvoicePdfRoute
@@ -301,7 +349,10 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteWithChildren
+  '/konto': typeof KontoRoute
   '/login': typeof LoginRoute
+  '/produkter': typeof ProdukterRoute
+  '/varukorg': typeof VarukorgRoute
   '/_authenticated/archived': typeof AuthenticatedArchivedRoute
   '/_authenticated/campaigns': typeof AuthenticatedCampaignsRoute
   '/_authenticated/customers': typeof AuthenticatedCustomersRoute
@@ -317,7 +368,10 @@ export interface FileRoutesById {
   '/api/gmail-diagnostic': typeof ApiGmailDiagnosticRoute
   '/api/push-test': typeof ApiPushTestRoute
   '/b/$token': typeof BTokenRoute
+  '/bestallningar/$id': typeof BestallningarIdRoute
   '/c/$token': typeof CTokenRouteWithChildren
+  '/produkt/$id': typeof ProduktIdRoute
+  '/bestallningar/': typeof BestallningarIndexRoute
   '/_authenticated/jobs/$id': typeof AuthenticatedJobsIdRouteWithChildren
   '/api/public/client-log': typeof ApiPublicClientLogRoute
   '/api/public/invoice-pdf': typeof ApiPublicInvoicePdfRoute
@@ -338,7 +392,10 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/konto'
     | '/login'
+    | '/produkter'
+    | '/varukorg'
     | '/archived'
     | '/campaigns'
     | '/customers'
@@ -354,7 +411,10 @@ export interface FileRouteTypes {
     | '/api/gmail-diagnostic'
     | '/api/push-test'
     | '/b/$token'
+    | '/bestallningar/$id'
     | '/c/$token'
+    | '/produkt/$id'
+    | '/bestallningar/'
     | '/jobs/$id'
     | '/api/public/client-log'
     | '/api/public/invoice-pdf'
@@ -373,7 +433,10 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/konto'
     | '/login'
+    | '/produkter'
+    | '/varukorg'
     | '/archived'
     | '/campaigns'
     | '/customers'
@@ -389,7 +452,10 @@ export interface FileRouteTypes {
     | '/api/gmail-diagnostic'
     | '/api/push-test'
     | '/b/$token'
+    | '/bestallningar/$id'
     | '/c/$token'
+    | '/produkt/$id'
+    | '/bestallningar'
     | '/jobs/$id'
     | '/api/public/client-log'
     | '/api/public/invoice-pdf'
@@ -409,7 +475,10 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/_authenticated'
+    | '/konto'
     | '/login'
+    | '/produkter'
+    | '/varukorg'
     | '/_authenticated/archived'
     | '/_authenticated/campaigns'
     | '/_authenticated/customers'
@@ -425,7 +494,10 @@ export interface FileRouteTypes {
     | '/api/gmail-diagnostic'
     | '/api/push-test'
     | '/b/$token'
+    | '/bestallningar/$id'
     | '/c/$token'
+    | '/produkt/$id'
+    | '/bestallningar/'
     | '/_authenticated/jobs/$id'
     | '/api/public/client-log'
     | '/api/public/invoice-pdf'
@@ -446,13 +518,19 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
+  KontoRoute: typeof KontoRoute
   LoginRoute: typeof LoginRoute
+  ProdukterRoute: typeof ProdukterRoute
+  VarukorgRoute: typeof VarukorgRoute
   ApiFortnoxArticleCleanupRoute: typeof ApiFortnoxArticleCleanupRoute
   ApiFortnoxPaymentTermsDiagnosticRoute: typeof ApiFortnoxPaymentTermsDiagnosticRoute
   ApiGmailDiagnosticRoute: typeof ApiGmailDiagnosticRoute
   ApiPushTestRoute: typeof ApiPushTestRoute
   BTokenRoute: typeof BTokenRoute
+  BestallningarIdRoute: typeof BestallningarIdRoute
   CTokenRoute: typeof CTokenRouteWithChildren
+  ProduktIdRoute: typeof ProduktIdRoute
+  BestallningarIndexRoute: typeof BestallningarIndexRoute
   ApiPublicClientLogRoute: typeof ApiPublicClientLogRoute
   ApiPublicInvoicePdfRoute: typeof ApiPublicInvoicePdfRoute
   ScandicBookTokenRoute: typeof ScandicBookTokenRoute
@@ -468,11 +546,32 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/varukorg': {
+      id: '/varukorg'
+      path: '/varukorg'
+      fullPath: '/varukorg'
+      preLoaderRoute: typeof VarukorgRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/produkter': {
+      id: '/produkter'
+      path: '/produkter'
+      fullPath: '/produkter'
+      preLoaderRoute: typeof ProdukterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login': {
       id: '/login'
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/konto': {
+      id: '/konto'
+      path: '/konto'
+      fullPath: '/konto'
+      preLoaderRoute: typeof KontoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated': {
@@ -489,11 +588,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/bestallningar/': {
+      id: '/bestallningar/'
+      path: '/bestallningar'
+      fullPath: '/bestallningar/'
+      preLoaderRoute: typeof BestallningarIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/produkt/$id': {
+      id: '/produkt/$id'
+      path: '/produkt/$id'
+      fullPath: '/produkt/$id'
+      preLoaderRoute: typeof ProduktIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/c/$token': {
       id: '/c/$token'
       path: '/c/$token'
       fullPath: '/c/$token'
       preLoaderRoute: typeof CTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/bestallningar/$id': {
+      id: '/bestallningar/$id'
+      path: '/bestallningar/$id'
+      fullPath: '/bestallningar/$id'
+      preLoaderRoute: typeof BestallningarIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/b/$token': {
@@ -769,13 +889,19 @@ const CTokenRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
+  KontoRoute: KontoRoute,
   LoginRoute: LoginRoute,
+  ProdukterRoute: ProdukterRoute,
+  VarukorgRoute: VarukorgRoute,
   ApiFortnoxArticleCleanupRoute: ApiFortnoxArticleCleanupRoute,
   ApiFortnoxPaymentTermsDiagnosticRoute: ApiFortnoxPaymentTermsDiagnosticRoute,
   ApiGmailDiagnosticRoute: ApiGmailDiagnosticRoute,
   ApiPushTestRoute: ApiPushTestRoute,
   BTokenRoute: BTokenRoute,
+  BestallningarIdRoute: BestallningarIdRoute,
   CTokenRoute: CTokenRouteWithChildren,
+  ProduktIdRoute: ProduktIdRoute,
+  BestallningarIndexRoute: BestallningarIndexRoute,
   ApiPublicClientLogRoute: ApiPublicClientLogRoute,
   ApiPublicInvoicePdfRoute: ApiPublicInvoicePdfRoute,
   ScandicBookTokenRoute: ScandicBookTokenRoute,

@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { CartProvider } from "@/lib/shop/cart";
 
 import appCss from "../styles.css?url";
 
@@ -82,7 +83,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       {
         name: "description",
         content:
-          "Sipomax is a web application for auto repair shops to manage customer communications and vehicle service statuses.",
+          "Beställ bilvårdsprodukter och maskiner från Sipomax — förtvätt, tvätt, polering, skydd och utrustning för biltvättar och verkstäder.",
       },
       { name: "author", content: "Lovable" },
       { name: "apple-mobile-web-app-capable", content: "yes" },
@@ -92,7 +93,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       {
         property: "og:description",
         content:
-          "Sipomax is a web application for auto repair shops to manage customer communications and vehicle service statuses.",
+          "Beställ bilvårdsprodukter och maskiner från Sipomax — förtvätt, tvätt, polering, skydd och utrustning för biltvättar och verkstäder.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
@@ -101,7 +102,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       {
         name: "twitter:description",
         content:
-          "Sipomax is a web application for auto repair shops to manage customer communications and vehicle service statuses.",
+          "Beställ bilvårdsprodukter och maskiner från Sipomax — förtvätt, tvätt, polering, skydd och utrustning för biltvättar och verkstäder.",
       },
       {
         property: "og:image",
@@ -218,7 +219,9 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <Outlet />
+      <CartProvider>
+        <Outlet />
+      </CartProvider>
     </QueryClientProvider>
   );
 }
