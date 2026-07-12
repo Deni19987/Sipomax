@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <!-- Background circle -->
+  <circle cx="100" cy="100" r="100" fill="#1a1a2e"/>
+  <!-- Car body -->
+  <rect x="30" y="105" width="140" height="38" rx="8" fill="#4f46e5"/>
+  <!-- Car roof -->
+  <path d="M55 105 L75 75 L125 75 L145 105 Z" fill="#6366f1"/>
+  <!-- Windshield -->
+  <path d="M80 80 L75 105 L125 105 L120 80 Z" fill="#c7d2fe" opacity="0.8"/>
+  <!-- Wheels -->
+  <circle cx="65" cy="143" r="18" fill="#1a1a2e" stroke="#818cf8" stroke-width="4"/>
+  <circle cx="65" cy="143" r="8" fill="#818cf8"/>
+  <circle cx="135" cy="143" r="18" fill="#1a1a2e" stroke="#818cf8" stroke-width="4"/>
+  <circle cx="135" cy="143" r="8" fill="#818cf8"/>
+  <!-- Speed lines -->
+  <line x1="20" y1="95" x2="45" y2="95" stroke="#818cf8" stroke-width="3" stroke-linecap="round" opacity="0.6"/>
+  <line x1="10" y1="105" x2="30" y2="105" stroke="#818cf8" stroke-width="2" stroke-linecap="round" opacity="0.4"/>
+  <line x1="15" y1="85" x2="35" y2="85" stroke="#818cf8" stroke-width="2" stroke-linecap="round" opacity="0.4"/>
+</svg>

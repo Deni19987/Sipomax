@@ -1,0 +1,1 @@
+ALTER TABLE public.scandic_bookings ADD COLUMN IF NOT EXISTS meeting_type text;

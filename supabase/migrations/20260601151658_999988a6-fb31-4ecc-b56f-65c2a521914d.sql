@@ -1,0 +1,1 @@
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS insights_last_seen_at timestamp with time zone NOT NULL DEFAULT now();

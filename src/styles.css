@@ -1,0 +1,357 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Design system definition.
+ *
+ * The @theme inline block maps CSS custom properties to Tailwind utility
+ * classes (e.g. --color-primary -> bg-primary, text-primary).
+ *
+ * The :root and .dark blocks define the actual color values using oklch.
+ * All colors MUST use oklch format.
+ *
+ * To add a new semantic color:
+ * 1. Add the variable to :root (light value) and .dark (dark value)
+ * 2. Register it in @theme inline as --color-<name>: var(--<name>)
+ */
+
+@theme inline {
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
+  --radius-3xl: 20px;
+  --radius-4xl: 24px;
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-display: "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ring-offset-background: var(--background);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-industrial-accent: var(--industrial-accent);
+  --color-panel-strip: var(--panel-strip);
+}
+
+:root {
+  /* Minimal SaaS palette — clean white, soft grays, single blue accent */
+  --radius: 8px;
+  --background: oklch(1 0 0);                         /* pure white */
+  --foreground: oklch(0.21 0.02 260);                 /* near-black slate */
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.21 0.02 260);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.21 0.02 260);
+  --primary: oklch(0.58 0.21 258);                    /* refined blue */
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.97 0.005 260);
+  --secondary-foreground: oklch(0.25 0.02 260);
+  --muted: oklch(0.97 0.005 260);
+  --muted-foreground: oklch(0.55 0.015 260);
+  --accent: oklch(0.96 0.01 258);                     /* soft blue tint */
+  --accent-foreground: oklch(0.35 0.15 258);
+  --destructive: oklch(0.6 0.22 27);
+  --destructive-foreground: oklch(0.99 0 0);
+  --border: oklch(0.93 0.005 260);                    /* hairline gray */
+  --input: oklch(0.93 0.005 260);
+  --ring: oklch(0.58 0.21 258);
+  --industrial-accent: oklch(0.58 0.21 258);
+  --panel-strip: oklch(0.97 0.005 260);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.22 0.02 250);
+  --sidebar-foreground: oklch(0.96 0.005 250);
+  --sidebar-primary: oklch(0.7 0.18 55);
+  --sidebar-primary-foreground: oklch(0.15 0.02 250);
+  --sidebar-accent: oklch(0.3 0.02 250);
+  --sidebar-accent-foreground: oklch(0.96 0.005 250);
+  --sidebar-border: oklch(0.4 0.02 250);
+  --sidebar-ring: oklch(0.7 0.18 55);
+}
+
+.dark {
+  --background: oklch(0.16 0.01 260);
+  --foreground: oklch(0.97 0.005 260);
+  --card: oklch(0.2 0.012 260);
+  --card-foreground: oklch(0.97 0.005 260);
+  --popover: oklch(0.2 0.012 260);
+  --popover-foreground: oklch(0.97 0.005 260);
+  --primary: oklch(0.65 0.2 258);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.25 0.012 260);
+  --secondary-foreground: oklch(0.97 0.005 260);
+  --muted: oklch(0.25 0.012 260);
+  --muted-foreground: oklch(0.7 0.01 260);
+  --accent: oklch(0.28 0.03 258);
+  --accent-foreground: oklch(0.85 0.1 258);
+  --destructive: oklch(0.6 0.22 27);
+  --destructive-foreground: oklch(0.99 0 0);
+  --border: oklch(0.28 0.012 260);
+  --input: oklch(0.28 0.012 260);
+  --ring: oklch(0.65 0.2 258);
+  --industrial-accent: oklch(0.65 0.2 258);
+  --panel-strip: oklch(0.22 0.012 260);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.12 0.015 250);
+  --sidebar-foreground: oklch(0.96 0.005 250);
+  --sidebar-primary: oklch(0.7 0.18 55);
+  --sidebar-primary-foreground: oklch(0.15 0.02 250);
+  --sidebar-accent: oklch(0.25 0.02 250);
+  --sidebar-accent-foreground: oklch(0.96 0.005 250);
+  --sidebar-border: oklch(0.4 0.02 250);
+  --sidebar-ring: oklch(0.7 0.18 55);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  html, body {
+    overflow-x: hidden;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    touch-action: pan-y;
+  }
+
+  /* Prevent iOS Safari from auto-zooming when focusing inputs */
+  @media (max-width: 767px) {
+    input, select, textarea {
+      font-size: 16px !important;
+    }
+  }
+
+  /* iOS Safari renders date/time inputs with native chrome that ignores
+     width constraints, making them taller and wider than sibling text
+     inputs and overflowing bordered containers on mobile. Strip the
+     native appearance so they respect w-full/h-* like every other input. */
+  input[type="date"],
+  input[type="time"],
+  input[type="datetime-local"],
+  input[type="month"] {
+    -webkit-appearance: none;
+    appearance: none;
+    min-width: 0;
+  }
+  input[type="date"]::-webkit-date-and-time-value,
+  input[type="time"]::-webkit-date-and-time-value,
+  input[type="datetime-local"]::-webkit-date-and-time-value {
+    text-align: left;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+    letter-spacing: -0.015em;
+    font-weight: 600;
+  }
+
+  code, kbd, pre, samp, .font-mono {
+    font-family: var(--font-mono);
+  }
+
+  /* Legacy helper classes — softened to fit the minimal SaaS aesthetic */
+  .panel-strip {
+    background: var(--panel-strip);
+    color: var(--color-muted-foreground);
+    letter-spacing: 0;
+    font-family: var(--font-sans);
+    font-weight: 500;
+    font-size: 0.75rem;
+    padding: 0.4rem 0.75rem;
+    border-bottom: 1px solid var(--color-border);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .industrial-grid {
+    background-image: radial-gradient(
+      circle at 1px 1px,
+      color-mix(in oklab, var(--color-border) 60%, transparent) 1px,
+      transparent 0
+    );
+    background-size: 28px 28px;
+  }
+}
+
+/*
+ * Page navigation transitions (View Transitions API).
+ *
+ * The router (router.tsx) tags each navigation on <html> via
+ * [data-nav-transition] = nav-forward | nav-back | nav-fade | none, derived
+ * from URL depth. We animate the `root` snapshot — always viewport-sized, so
+ * there is never a height morph between pages of different lengths (that morph
+ * was the old "page scrolls up from the bottom" artifact).
+ *
+ * Two variants by screen width:
+ *
+ * - Mobile (< 768px): the platform-native stack push/pop. Forward: the new
+ *   page slides in from the RIGHT and covers the old page, which shifts
+ *   slightly left underneath (parallax) — both moving leftward together.
+ *   Back: the old page slides off to the right (on top) revealing the
+ *   previous page settling in from its slight left offset. This is the iOS /
+ *   Android convention, so it reads as "normal" motion.
+ *
+ * - Desktop (≥ 768px): a subtle nudge — the pages cross-fade while drifting a
+ *   couple of centimeters in the navigation direction. A full-viewport sweep
+ *   is too much motion on a large screen.
+ *
+ * The sticky header and impersonation banner carry their own
+ * view-transition-name (set in _authenticated.tsx), lifting them out of the
+ * root snapshot so they stay perfectly still while the page animates.
+ *
+ * Robustness notes: every animation is compositor-only (transform/opacity —
+ * no layout or paint work per frame, so slow devices just play it at their
+ * own frame rate), durations are short, `prefers-reduced-motion: reduce`
+ * users navigate instantly, and browsers without the View Transitions API
+ * ignore all of this and swap instantly. Rapid double-navigations are safe:
+ * the browser skips the in-flight transition when a new one starts.
+ *
+ * These rules live outside @layer base so they aren't affected by layer
+ * ordering.
+ */
+
+/* Chrome that stays put across navigations: never fade or move it. */
+::view-transition-group(site-header),
+::view-transition-old(site-header),
+::view-transition-new(site-header),
+::view-transition-group(app-banner),
+::view-transition-old(app-banner),
+::view-transition-new(app-banner) {
+  animation: none;
+}
+
+/* Public / auth routes (login, landing, customer links): swap instantly. */
+:root[data-nav-transition="none"]::view-transition-old(root),
+:root[data-nav-transition="none"]::view-transition-new(root) {
+  animation: none;
+}
+
+/* Same-level (tab switch): a quick cross-fade, no slide (all widths). */
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-nav-transition="nav-fade"]::view-transition-old(root) {
+    animation: cf-fade-out 140ms ease both;
+  }
+  :root[data-nav-transition="nav-fade"]::view-transition-new(root) {
+    animation: cf-fade-in 200ms ease both;
+  }
+}
+
+/* ---- Mobile: native-feeling stack push/pop ---------------------------- */
+@media (prefers-reduced-motion: no-preference) and (max-width: 767.98px) {
+  /* Forward (push): new page slides in from the right, over the old page,
+     which drifts a third of the way left underneath. New is painted above
+     old by default, so no z-index juggling is needed here. */
+  :root[data-nav-transition="nav-forward"]::view-transition-old(root) {
+    animation: cf-push-under 320ms cubic-bezier(0.32, 0.72, 0, 1) both;
+  }
+  :root[data-nav-transition="nav-forward"]::view-transition-new(root) {
+    animation: cf-push-over 320ms cubic-bezier(0.32, 0.72, 0, 1) both;
+  }
+
+  /* Back (pop): the exact mirror of push — the previous page slides in from
+     the LEFT on top, while the old page drifts a third of the way right
+     underneath. Deliberately built without z-index: reordering the old
+     snapshot above the new one is not honored by all engines (iOS Safari),
+     which made the old reveal-style pop play inverted there — the incoming
+     page appeared on top moving from the wrong side. A cover-style pop only
+     relies on default stacking (new above old), so it renders identically
+     everywhere. */
+  :root[data-nav-transition="nav-back"]::view-transition-old(root) {
+    animation: cf-pop-under 320ms cubic-bezier(0.32, 0.72, 0, 1) both;
+  }
+  :root[data-nav-transition="nav-back"]::view-transition-new(root) {
+    animation: cf-pop-over 320ms cubic-bezier(0.32, 0.72, 0, 1) both;
+  }
+}
+
+/* ---- Desktop: subtle drift + fade ------------------------------------- */
+@media (prefers-reduced-motion: no-preference) and (min-width: 768px) {
+  :root[data-nav-transition="nav-forward"]::view-transition-old(root) {
+    animation: cf-drift-out-left 220ms cubic-bezier(0.4, 0, 0.2, 1) both;
+  }
+  :root[data-nav-transition="nav-forward"]::view-transition-new(root) {
+    animation: cf-drift-in-right 220ms cubic-bezier(0.4, 0, 0.2, 1) both;
+  }
+  :root[data-nav-transition="nav-back"]::view-transition-old(root) {
+    animation: cf-drift-out-right 220ms cubic-bezier(0.4, 0, 0.2, 1) both;
+  }
+  :root[data-nav-transition="nav-back"]::view-transition-new(root) {
+    animation: cf-drift-in-left 220ms cubic-bezier(0.4, 0, 0.2, 1) both;
+  }
+}
+
+/* Reduced motion: navigate instantly — no slide, no fade. Kept last and
+   !important so it wins over everything above regardless of specificity. */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
+
+/* Mobile push/pop: the covering page travels the full viewport width; the
+   covered page only drifts 30% behind it (parallax) and dims slightly for
+   depth, like a native nav stack. Pop mirrors push. */
+@keyframes cf-push-over { from { transform: translateX(100%); } to { transform: translateX(0); } }
+@keyframes cf-push-under { from { transform: translateX(0); opacity: 1; } to { transform: translateX(-30%); opacity: 0.8; } }
+@keyframes cf-pop-over { from { transform: translateX(-100%); } to { transform: translateX(0); } }
+@keyframes cf-pop-under { from { transform: translateX(0); opacity: 1; } to { transform: translateX(30%); opacity: 0.8; } }
+
+/* Desktop drift: ~2cm of travel with a fade, moving in the nav direction. */
+@keyframes cf-drift-in-right { from { opacity: 0; transform: translateX(64px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes cf-drift-out-left { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(-64px); } }
+@keyframes cf-drift-in-left { from { opacity: 0; transform: translateX(-64px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes cf-drift-out-right { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(64px); } }
+
+@keyframes cf-fade-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes cf-fade-in { from { opacity: 0; } to { opacity: 1; } }

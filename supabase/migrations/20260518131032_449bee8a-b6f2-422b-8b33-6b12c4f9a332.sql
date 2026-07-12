@@ -1,0 +1,1 @@
+ALTER TABLE public.status_updates ADD COLUMN quote_amount NUMERIC(10,2);
