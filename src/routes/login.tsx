@@ -296,10 +296,16 @@ function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4 py-10">
+    <div className="relative min-h-screen flex items-center justify-center bg-background px-4 py-10 overflow-hidden">
+      {/* Brand backdrop */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
+        <div className="absolute left-1/2 top-[-12%] h-72 w-72 -translate-x-1/2 rounded-full bg-primary/15 blur-3xl" />
+        <div className="absolute bottom-[-15%] right-[-10%] h-64 w-64 rounded-full bg-primary/10 blur-3xl" />
+      </div>
+
       <div className="w-full max-w-sm space-y-8">
         <div className="text-center">
-          <SipomaxLogo className="h-14 w-14 mb-4 mx-auto" />
+          <SipomaxLogo className="h-16 w-16 mb-4 mx-auto drop-shadow-md" />
           <h1 className="text-2xl font-semibold tracking-tight">Sipomax</h1>
           <p className="text-sm text-muted-foreground mt-1.5">
             {subtitleMap[phase] ?? "Logga in för att hantera dina jobb"}
@@ -468,6 +474,9 @@ function LoginPage() {
           </Card>
         )}
 
+        <p className="text-center text-xs text-muted-foreground/70">
+          © {new Date().getFullYear()} Sipomax
+        </p>
       </div>
     </div>
   );
