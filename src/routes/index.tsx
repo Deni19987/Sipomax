@@ -32,6 +32,30 @@ function HomePage() {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
 
+  // When we've just arrived from a successful login, claim the shared
+  // `brand-hero` view-transition-name so the login page's red panel morphs
+  // into this header. Cleared right after so ordinary navigations away from
+  // the home page don't animate the header.
+  const [heroMorph, setHeroMorph] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return !!sessionStorage.getItem("sipomax:brandHeroMorph");
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    if (!heroMorph) return;
+    try {
+      sessionStorage.removeItem("sipomax:brandHeroMorph");
+    } catch {
+      /* ignore */
+    }
+    const t = setTimeout(() => setHeroMorph(false), 600);
+    return () => clearTimeout(t);
+  }, [heroMorph]);
+
   useEffect(() => {
     if (isAuthLanding()) {
       window.location.replace(`/login${_initialSearch}${_initialHash}`);
@@ -43,7 +67,10 @@ function HomePage() {
   return (
     <ShopShell>
       {/* Röd hjältesektion: logotyp, sök och populära kategorier */}
-      <header className="rounded-b-3xl bg-gradient-to-b from-primary via-primary to-red-800 px-4 pb-6 pt-[calc(env(safe-area-inset-top)+1.25rem)]">
+      <header
+        className="rounded-b-3xl bg-gradient-to-b from-primary via-primary to-red-800 px-4 pb-6 pt-[calc(env(safe-area-inset-top)+1.25rem)]"
+        style={heroMorph ? { viewTransitionName: "brand-hero" } : undefined}
+      >
         <div className="relative flex items-center justify-center">
           <SipomaxWordmark />
           <Link

@@ -275,6 +275,25 @@
   animation: none;
 }
 
+/* Shared element: the red brand panel morphs from the login screen into the
+   home page's red header. The login hero and the home header both carry
+   view-transition-name: brand-hero, so the browser tweens position/size while
+   cross-fading their contents. Slightly longer + a soft ease so the move
+   reads clearly. Runs even on public routes (root swaps instantly above,
+   this named group animates on top). Disabled under reduced motion by the
+   catch-all rule further down. */
+@media (prefers-reduced-motion: no-preference) {
+  ::view-transition-group(brand-hero) {
+    animation-duration: 460ms;
+    animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  ::view-transition-old(brand-hero),
+  ::view-transition-new(brand-hero) {
+    animation-duration: 460ms;
+    animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+  }
+}
+
 /* Same-level (tab switch): a quick cross-fade, no slide (all widths). */
 @media (prefers-reduced-motion: no-preference) {
   :root[data-nav-transition="nav-fade"]::view-transition-old(root) {

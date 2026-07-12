@@ -4,11 +4,15 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useRouterState,
+  useNavigate,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
 import { useEffect } from "react";
+import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/use-auth";
 import { CartProvider } from "@/lib/shop/cart";
 
 import appCss from "../styles.css?url";
@@ -220,8 +224,61 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <CartProvider>
-        <Outlet />
+        <AuthGate>
+          <Outlet />
+        </AuthGate>
       </CartProvider>
     </QueryClientProvider>
+  );
+}
+
+// Routes reachable without a session: the login screen itself and the
+// public, token-scoped customer links. Everything else — the whole shop —
+// requires a signed-in user.
+function isPublicPath(pathname: string): boolean {
+  return (
+    pathname === "/login" ||
+    pathname.startsWith("/b/") ||
+    pathname.startsWith("/c/") ||
+    pathname.startsWith("/scandic/book")
+  );
+}
+
+// A recovery/invite/PKCE landing carries tokens in the URL. Let those render
+// so the page-level handlers (login.tsx / index.tsx) can forward them, rather
+// than bouncing to a token-less /login and dropping the tokens.
+function hasAuthTokens(): boolean {
+  if (typeof window === "undefined") return false;
+  const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  const type = hash.get("type");
+  const hasHashTokens = !!hash.get("access_token") && (type === "recovery" || type === "invite");
+  const hasCode = new URLSearchParams(window.location.search).has("code");
+  return hasHashTokens || hasCode;
+}
+
+/**
+ * Locks the app behind the login screen. Unauthenticated visitors to any
+ * non-public route are redirected to /login; public routes and token landings
+ * always render. While the session is still resolving we show a brand splash
+ * rather than flashing protected content.
+ */
+function AuthGate({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  const navigate = useNavigate();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+
+  const allowed = isPublicPath(pathname) || hasAuthTokens();
+  const blocked = !allowed && !loading && !user;
+
+  useEffect(() => {
+    if (blocked) navigate({ to: "/login", viewTransition: false });
+  }, [blocked, navigate]);
+
+  if (allowed || (!loading && user)) return <>{children}</>;
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-neutral-100">
+      <Loader2 className="h-6 w-6 animate-spin text-primary" />
+    </div>
   );
 }
