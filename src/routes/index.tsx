@@ -3,7 +3,13 @@ import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import { Search, UserRound } from "lucide-react";
 import { useEffect, useState } from "react";
-import { FreeShippingBanner, CategoryCard, OrderCard } from "@/components/shop/cards";
+import {
+  CampaignBubble,
+  CategoryCard,
+  FreeShippingBanner,
+  OrderCard,
+} from "@/components/shop/cards";
+import { useShopExtras } from "@/lib/shop/use-shop-extras";
 import { ShopShell, SipomaxWordmark } from "@/components/shop/ShopShell";
 import { useAuth } from "@/hooks/use-auth";
 import { CATEGORIES } from "@/lib/shop/catalog";
@@ -87,6 +93,9 @@ function HomePage() {
   }, []);
 
   const recentOrders = (orders ?? []).slice(0, 3);
+  const { getCampaign } = useShopExtras();
+  const announcement = getCampaign("announcement");
+  const shippingCampaign = getCampaign("free_shipping");
 
   return (
     <ShopShell>
@@ -145,7 +154,8 @@ function HomePage() {
       </header>
 
       <div className="space-y-5 px-4 pt-5">
-        <FreeShippingBanner />
+        {announcement ? <CampaignBubble campaign={announcement} /> : null}
+        <FreeShippingBanner campaign={shippingCampaign} />
 
         <section>
           <div className="flex items-center justify-between">

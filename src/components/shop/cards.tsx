@@ -1,7 +1,12 @@
 import { Link } from "@tanstack/react-router";
-import { ChevronRight, Package, Plus, Truck } from "lucide-react";
-import { formatPrice, getCategory, type Category, type Product } from "@/lib/shop/catalog";
+import { ChevronRight, Megaphone, Package, Plus, Truck } from "lucide-react";
+import { formatPrice, getCategory, type Category } from "@/lib/shop/catalog";
 import { useCart } from "@/lib/shop/cart";
+import {
+  renderCampaignMessage,
+  type ShopProduct,
+  type WorkshopCampaign,
+} from "@/lib/shop/campaigns";
 import { ORDER_STATUS_LABELS, type ShopOrder } from "@/lib/shop/orders";
 import { CATEGORY_ICONS } from "@/components/shop/category-icons";
 import { cn } from "@/lib/utils";
@@ -30,7 +35,7 @@ export function CategoryCard({
   );
 }
 
-export function ProductCard({ product }: { product: Product }) {
+export function ProductCard({ product }: { product: ShopProduct }) {
   const { addToCart } = useCart();
   const category = getCategory(product.category);
   const Icon = CATEGORY_ICONS[product.category];
@@ -40,11 +45,15 @@ export function ProductCard({ product }: { product: Product }) {
         to="/produkt/$id"
         params={{ id: product.id }}
         className={cn(
-          "flex h-16 w-16 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br text-white",
+          "flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gradient-to-br text-white",
           category?.gradient ?? "from-slate-700 to-slate-900",
         )}
       >
-        <Icon className="h-7 w-7 text-white/80" />
+        {product.imageUrl ? (
+          <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover" />
+        ) : (
+          <Icon className="h-7 w-7 text-white/80" />
+        )}
       </Link>
       <Link to="/produkt/$id" params={{ id: product.id }} className="min-w-0 flex-1">
         <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
@@ -59,7 +68,7 @@ export function ProductCard({ product }: { product: Product }) {
       <button
         type="button"
         aria-label={`Lägg ${product.name} i varukorgen`}
-        onClick={() => addToCart(product.id)}
+        onClick={() => addToCart(product)}
         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow transition-transform active:scale-90"
       >
         <Plus className="h-5 w-5" />
@@ -106,13 +115,68 @@ export function OrderCard({ order }: { order: ShopOrder }) {
   );
 }
 
-export function FreeShippingBanner() {
+export function FreeShippingBanner({ campaign }: { campaign?: WorkshopCampaign }) {
   return (
     <div className="flex items-center gap-3 rounded-xl bg-neutral-900 p-4 text-white">
       <Truck className="h-6 w-6 shrink-0 text-primary" />
       <div>
-        <p className="text-sm font-bold">Fri frakt på beställningar över 2 500 kr</p>
+        <p className="text-sm font-bold">
+          {campaign ? renderCampaignMessage(campaign) : "Fri frakt på beställningar över 2 500 kr"}
+        </p>
         <p className="text-xs text-neutral-400">Snabba leveranser · Faktura via Fortnox</p>
+      </div>
+    </div>
+  );
+}
+
+// Frifrakt-bubblan i varukorgen. Räknar ut hur mycket som är kvar till fri
+// frakt utifrån kundens nuvarande varukorg och kampanjens minimibelopp.
+// Används även i verkstadens förhandsvisning.
+export function CartShippingBubble({
+  minOrder,
+  title,
+  total,
+}: {
+  minOrder: number;
+  title?: string | null;
+  total: number;
+}) {
+  const remaining = minOrder - total;
+  return (
+    <div className="flex items-center gap-3 rounded-xl bg-neutral-900 p-4 text-white">
+      <Truck className="h-6 w-6 shrink-0 text-primary" />
+      <div className="min-w-0">
+        {title ? (
+          <p className="text-xs font-semibold uppercase tracking-wide text-primary">{title}</p>
+        ) : null}
+        <p className="text-sm">
+          {remaining > 0 ? (
+            <>
+              Handla för <b>{formatPrice(remaining)}</b> till för fri frakt
+            </>
+          ) : (
+            <b>Du har fri frakt på denna beställning!</b>
+          )}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// Kampanjbubbla för mallarna "announcement" (startsidan) och "product_promo"
+// (produktlistan). Samma komponent används i verkstadens förhandsvisning så
+// att det verkstaden ser är exakt det kunden får.
+export function CampaignBubble({ campaign }: { campaign: WorkshopCampaign }) {
+  return (
+    <div className="flex items-start gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+        <Megaphone className="h-5 w-5" />
+      </span>
+      <div className="min-w-0">
+        <p className="text-sm font-bold text-foreground">{campaign.title}</p>
+        <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+          {renderCampaignMessage(campaign)}
+        </p>
       </div>
     </div>
   );
