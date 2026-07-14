@@ -114,7 +114,7 @@ export async function getUserAuthEmail(userId: string): Promise<string | null> {
   return data.user?.email ?? null;
 }
 
-const DEVELOPER_EMAILS = new Set<string>(["hedisson@live.se"]);
+export const DEVELOPER_EMAILS = new Set<string>(["ferchichideni@gmail.com"]);
 
 export async function isDeveloperUser(userId: string): Promise<boolean> {
   const email = await getUserAuthEmail(userId);
@@ -142,7 +142,7 @@ export async function startImpersonation(
   targetEmail: string,
 ): Promise<{ workshopId: string; email: string }> {
   if (!(await isDeveloperUser(adminUserId))) {
-    throw new Error("Endast hedisson kan använda impersonation.");
+    throw new Error("Endast utvecklarkontot kan använda kontobyte.");
   }
   const { data: users, error } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 200 });
   if (error) throw new Error(error.message);
@@ -169,7 +169,7 @@ export async function startImpersonation(
 // Developer-only: stop impersonating and return to own identity.
 export async function stopImpersonation(adminUserId: string): Promise<void> {
   if (!(await isDeveloperUser(adminUserId))) {
-    throw new Error("Endast hedisson kan avsluta impersonation.");
+    throw new Error("Endast utvecklarkontot kan avsluta kontobyte.");
   }
   await supabaseAdmin
     .from("profiles")
@@ -206,7 +206,7 @@ export async function generateImpersonationOtp(
   targetEmail: string,
 ): Promise<{ email: string; otp: string }> {
   if (!(await isDeveloperUser(adminUserId))) {
-    throw new Error("Endast hedisson kan använda impersonation.");
+    throw new Error("Endast utvecklarkontot kan använda kontobyte.");
   }
 
   const email = targetEmail.trim().toLowerCase();

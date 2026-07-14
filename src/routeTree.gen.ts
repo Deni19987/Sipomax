@@ -9,13 +9,18 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as VerkstadRouteImport } from './routes/verkstad'
 import { Route as VarukorgRouteImport } from './routes/varukorg'
 import { Route as ProdukterRouteImport } from './routes/produkter'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as KontoRouteImport } from './routes/konto'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as VerkstadIndexRouteImport } from './routes/verkstad.index'
 import { Route as BestallningarIndexRouteImport } from './routes/bestallningar.index'
+import { Route as VerkstadStatistikRouteImport } from './routes/verkstad.statistik'
+import { Route as VerkstadInstallningarRouteImport } from './routes/verkstad.installningar'
+import { Route as VerkstadChattRouteImport } from './routes/verkstad.chatt'
 import { Route as ProduktIdRouteImport } from './routes/produkt.$id'
 import { Route as CTokenRouteImport } from './routes/c.$token'
 import { Route as BestallningarIdRouteImport } from './routes/bestallningar.$id'
@@ -50,6 +55,11 @@ import { Route as ApiPublicFortnoxCallbackRouteImport } from './routes/api/publi
 import { Route as AuthenticatedJobsIdInvoiceRouteImport } from './routes/_authenticated/jobs.$id.invoice'
 import { Route as AuthenticatedJobsIdUpdatesUpdateIdRouteImport } from './routes/_authenticated/jobs.$id.updates.$updateId'
 
+const VerkstadRoute = VerkstadRouteImport.update({
+  id: '/verkstad',
+  path: '/verkstad',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const VarukorgRoute = VarukorgRouteImport.update({
   id: '/varukorg',
   path: '/varukorg',
@@ -79,10 +89,30 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const VerkstadIndexRoute = VerkstadIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => VerkstadRoute,
+} as any)
 const BestallningarIndexRoute = BestallningarIndexRouteImport.update({
   id: '/bestallningar/',
   path: '/bestallningar/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const VerkstadStatistikRoute = VerkstadStatistikRouteImport.update({
+  id: '/statistik',
+  path: '/statistik',
+  getParentRoute: () => VerkstadRoute,
+} as any)
+const VerkstadInstallningarRoute = VerkstadInstallningarRouteImport.update({
+  id: '/installningar',
+  path: '/installningar',
+  getParentRoute: () => VerkstadRoute,
+} as any)
+const VerkstadChattRoute = VerkstadChattRouteImport.update({
+  id: '/chatt',
+  path: '/chatt',
+  getParentRoute: () => VerkstadRoute,
 } as any)
 const ProduktIdRoute = ProduktIdRouteImport.update({
   id: '/produkt/$id',
@@ -269,6 +299,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/produkter': typeof ProdukterRoute
   '/varukorg': typeof VarukorgRoute
+  '/verkstad': typeof VerkstadRouteWithChildren
   '/archived': typeof AuthenticatedArchivedRoute
   '/campaigns': typeof AuthenticatedCampaignsRoute
   '/customers': typeof AuthenticatedCustomersRoute
@@ -287,7 +318,11 @@ export interface FileRoutesByFullPath {
   '/bestallningar/$id': typeof BestallningarIdRoute
   '/c/$token': typeof CTokenRouteWithChildren
   '/produkt/$id': typeof ProduktIdRoute
+  '/verkstad/chatt': typeof VerkstadChattRoute
+  '/verkstad/installningar': typeof VerkstadInstallningarRoute
+  '/verkstad/statistik': typeof VerkstadStatistikRoute
   '/bestallningar/': typeof BestallningarIndexRoute
+  '/verkstad/': typeof VerkstadIndexRoute
   '/jobs/$id': typeof AuthenticatedJobsIdRouteWithChildren
   '/api/public/client-log': typeof ApiPublicClientLogRoute
   '/api/public/invoice-pdf': typeof ApiPublicInvoicePdfRoute
@@ -328,7 +363,11 @@ export interface FileRoutesByTo {
   '/bestallningar/$id': typeof BestallningarIdRoute
   '/c/$token': typeof CTokenRouteWithChildren
   '/produkt/$id': typeof ProduktIdRoute
+  '/verkstad/chatt': typeof VerkstadChattRoute
+  '/verkstad/installningar': typeof VerkstadInstallningarRoute
+  '/verkstad/statistik': typeof VerkstadStatistikRoute
   '/bestallningar': typeof BestallningarIndexRoute
+  '/verkstad': typeof VerkstadIndexRoute
   '/jobs/$id': typeof AuthenticatedJobsIdRouteWithChildren
   '/api/public/client-log': typeof ApiPublicClientLogRoute
   '/api/public/invoice-pdf': typeof ApiPublicInvoicePdfRoute
@@ -353,6 +392,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/produkter': typeof ProdukterRoute
   '/varukorg': typeof VarukorgRoute
+  '/verkstad': typeof VerkstadRouteWithChildren
   '/_authenticated/archived': typeof AuthenticatedArchivedRoute
   '/_authenticated/campaigns': typeof AuthenticatedCampaignsRoute
   '/_authenticated/customers': typeof AuthenticatedCustomersRoute
@@ -371,7 +411,11 @@ export interface FileRoutesById {
   '/bestallningar/$id': typeof BestallningarIdRoute
   '/c/$token': typeof CTokenRouteWithChildren
   '/produkt/$id': typeof ProduktIdRoute
+  '/verkstad/chatt': typeof VerkstadChattRoute
+  '/verkstad/installningar': typeof VerkstadInstallningarRoute
+  '/verkstad/statistik': typeof VerkstadStatistikRoute
   '/bestallningar/': typeof BestallningarIndexRoute
+  '/verkstad/': typeof VerkstadIndexRoute
   '/_authenticated/jobs/$id': typeof AuthenticatedJobsIdRouteWithChildren
   '/api/public/client-log': typeof ApiPublicClientLogRoute
   '/api/public/invoice-pdf': typeof ApiPublicInvoicePdfRoute
@@ -396,6 +440,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/produkter'
     | '/varukorg'
+    | '/verkstad'
     | '/archived'
     | '/campaigns'
     | '/customers'
@@ -414,7 +459,11 @@ export interface FileRouteTypes {
     | '/bestallningar/$id'
     | '/c/$token'
     | '/produkt/$id'
+    | '/verkstad/chatt'
+    | '/verkstad/installningar'
+    | '/verkstad/statistik'
     | '/bestallningar/'
+    | '/verkstad/'
     | '/jobs/$id'
     | '/api/public/client-log'
     | '/api/public/invoice-pdf'
@@ -455,7 +504,11 @@ export interface FileRouteTypes {
     | '/bestallningar/$id'
     | '/c/$token'
     | '/produkt/$id'
+    | '/verkstad/chatt'
+    | '/verkstad/installningar'
+    | '/verkstad/statistik'
     | '/bestallningar'
+    | '/verkstad'
     | '/jobs/$id'
     | '/api/public/client-log'
     | '/api/public/invoice-pdf'
@@ -479,6 +532,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/produkter'
     | '/varukorg'
+    | '/verkstad'
     | '/_authenticated/archived'
     | '/_authenticated/campaigns'
     | '/_authenticated/customers'
@@ -497,7 +551,11 @@ export interface FileRouteTypes {
     | '/bestallningar/$id'
     | '/c/$token'
     | '/produkt/$id'
+    | '/verkstad/chatt'
+    | '/verkstad/installningar'
+    | '/verkstad/statistik'
     | '/bestallningar/'
+    | '/verkstad/'
     | '/_authenticated/jobs/$id'
     | '/api/public/client-log'
     | '/api/public/invoice-pdf'
@@ -522,6 +580,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   ProdukterRoute: typeof ProdukterRoute
   VarukorgRoute: typeof VarukorgRoute
+  VerkstadRoute: typeof VerkstadRouteWithChildren
   ApiFortnoxArticleCleanupRoute: typeof ApiFortnoxArticleCleanupRoute
   ApiFortnoxPaymentTermsDiagnosticRoute: typeof ApiFortnoxPaymentTermsDiagnosticRoute
   ApiGmailDiagnosticRoute: typeof ApiGmailDiagnosticRoute
@@ -546,6 +605,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/verkstad': {
+      id: '/verkstad'
+      path: '/verkstad'
+      fullPath: '/verkstad'
+      preLoaderRoute: typeof VerkstadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/varukorg': {
       id: '/varukorg'
       path: '/varukorg'
@@ -588,12 +654,40 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/verkstad/': {
+      id: '/verkstad/'
+      path: '/'
+      fullPath: '/verkstad/'
+      preLoaderRoute: typeof VerkstadIndexRouteImport
+      parentRoute: typeof VerkstadRoute
+    }
     '/bestallningar/': {
       id: '/bestallningar/'
       path: '/bestallningar'
       fullPath: '/bestallningar/'
       preLoaderRoute: typeof BestallningarIndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/verkstad/statistik': {
+      id: '/verkstad/statistik'
+      path: '/statistik'
+      fullPath: '/verkstad/statistik'
+      preLoaderRoute: typeof VerkstadStatistikRouteImport
+      parentRoute: typeof VerkstadRoute
+    }
+    '/verkstad/installningar': {
+      id: '/verkstad/installningar'
+      path: '/installningar'
+      fullPath: '/verkstad/installningar'
+      preLoaderRoute: typeof VerkstadInstallningarRouteImport
+      parentRoute: typeof VerkstadRoute
+    }
+    '/verkstad/chatt': {
+      id: '/verkstad/chatt'
+      path: '/chatt'
+      fullPath: '/verkstad/chatt'
+      preLoaderRoute: typeof VerkstadChattRouteImport
+      parentRoute: typeof VerkstadRoute
     }
     '/produkt/$id': {
       id: '/produkt/$id'
@@ -875,6 +969,24 @@ const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
   AuthenticatedRouteChildren,
 )
 
+interface VerkstadRouteChildren {
+  VerkstadChattRoute: typeof VerkstadChattRoute
+  VerkstadInstallningarRoute: typeof VerkstadInstallningarRoute
+  VerkstadStatistikRoute: typeof VerkstadStatistikRoute
+  VerkstadIndexRoute: typeof VerkstadIndexRoute
+}
+
+const VerkstadRouteChildren: VerkstadRouteChildren = {
+  VerkstadChattRoute: VerkstadChattRoute,
+  VerkstadInstallningarRoute: VerkstadInstallningarRoute,
+  VerkstadStatistikRoute: VerkstadStatistikRoute,
+  VerkstadIndexRoute: VerkstadIndexRoute,
+}
+
+const VerkstadRouteWithChildren = VerkstadRoute._addFileChildren(
+  VerkstadRouteChildren,
+)
+
 interface CTokenRouteChildren {
   CTokenUpdatesUpdateIdRoute: typeof CTokenUpdatesUpdateIdRoute
 }
@@ -893,6 +1005,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   ProdukterRoute: ProdukterRoute,
   VarukorgRoute: VarukorgRoute,
+  VerkstadRoute: VerkstadRouteWithChildren,
   ApiFortnoxArticleCleanupRoute: ApiFortnoxArticleCleanupRoute,
   ApiFortnoxPaymentTermsDiagnosticRoute: ApiFortnoxPaymentTermsDiagnosticRoute,
   ApiGmailDiagnosticRoute: ApiGmailDiagnosticRoute,

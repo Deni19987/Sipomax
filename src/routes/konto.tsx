@@ -1,4 +1,6 @@
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
+import { useQuery } from "@tanstack/react-query";
 import {
   Building2,
   ChevronRight,
@@ -10,11 +12,19 @@ import {
   Package,
   Phone,
   UserRound,
+  Wrench,
 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  AccountSwitcherDropdown,
+  ImpersonationBanner,
+  useAccountSwitcher,
+} from "@/components/AccountSwitcher";
 import { ShopShell } from "@/components/shop/ShopShell";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
+import { DEV_SESSION_KEY } from "@/lib/impersonation-client";
+import { getMyAccountInfo } from "@/lib/shop-orders.functions";
 
 export const Route = createFileRoute("/konto")({
   ssr: false,
@@ -24,9 +34,17 @@ export const Route = createFileRoute("/konto")({
 function AccountPage() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
+  const switcher = useAccountSwitcher();
+  const fetchAccountInfo = useServerFn(getMyAccountInfo);
+  const { data: accountInfo } = useQuery({
+    queryKey: ["my-account-info"],
+    queryFn: () => fetchAccountInfo(),
+    enabled: !!user,
+  });
 
   return (
     <ShopShell title="Konto" backTo="/">
+      <ImpersonationBanner switcher={switcher} />
       <div className="space-y-4 px-4 pt-4">
         <div className="rounded-xl bg-card p-4 shadow-sm">
           <div className="flex items-center gap-3">
@@ -38,10 +56,10 @@ function AccountPage() {
                 <p className="text-sm text-muted-foreground">Laddar…</p>
               ) : user ? (
                 <>
-                  <p className="truncate text-sm font-bold text-card-foreground">
-                    {user.email}
+                  <p className="truncate text-sm font-bold text-card-foreground">{user.email}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {accountInfo?.accountType === "workshop" ? "Verkstadskonto" : "Inloggad kund"}
                   </p>
-                  <p className="text-xs text-muted-foreground">Inloggad kund</p>
                 </>
               ) : (
                 <>
@@ -53,11 +71,26 @@ function AccountPage() {
               )}
             </div>
           </div>
+          {switcher.isDeveloper && (
+            <div className="mt-3 flex items-center justify-between rounded-lg bg-muted/50 px-3 py-2">
+              <span className="text-xs text-muted-foreground">Byt konto</span>
+              <AccountSwitcherDropdown switcher={switcher} />
+            </div>
+          )}
+          {accountInfo?.accountType === "workshop" && (
+            <Link
+              to="/verkstad"
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-neutral-900 py-2.5 text-sm font-semibold text-white"
+            >
+              <Wrench className="h-4 w-4" /> Till verkstadsvyn
+            </Link>
+          )}
           {!loading &&
             (user ? (
               <button
                 type="button"
                 onClick={async () => {
+                  localStorage.removeItem(DEV_SESSION_KEY);
                   await supabase.auth.signOut();
                   toast.success("Du är utloggad");
                   navigate({ to: "/login", viewTransition: false });

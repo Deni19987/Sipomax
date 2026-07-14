@@ -1,7 +1,8 @@
 import { Link } from "@tanstack/react-router";
 import { ChevronRight, Package, Plus, Truck } from "lucide-react";
 import { formatPrice, getCategory, type Category, type Product } from "@/lib/shop/catalog";
-import { ORDER_STATUS_LABELS, useCart, type Order } from "@/lib/shop/cart";
+import { useCart } from "@/lib/shop/cart";
+import { ORDER_STATUS_LABELS, type ShopOrder } from "@/lib/shop/orders";
 import { CATEGORY_ICONS } from "@/components/shop/category-icons";
 import { cn } from "@/lib/utils";
 
@@ -67,7 +68,7 @@ export function ProductCard({ product }: { product: Product }) {
   );
 }
 
-export function OrderCard({ order }: { order: Order }) {
+export function OrderCard({ order }: { order: ShopOrder }) {
   const productCount = order.lines.reduce((sum, l) => sum + l.quantity, 0);
   const date = new Date(order.createdAt).toLocaleDateString("sv-SE", {
     day: "numeric",

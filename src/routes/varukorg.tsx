@@ -1,10 +1,14 @@
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
+import { useQueryClient } from "@tanstack/react-query";
 import { Minus, Plus, ShoppingCart, Trash2, Truck } from "lucide-react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { ShopShell } from "@/components/shop/ShopShell";
 import { CATEGORY_ICONS } from "@/components/shop/category-icons";
 import { FREE_SHIPPING_THRESHOLD, formatPrice, getCategory, getProduct } from "@/lib/shop/catalog";
 import { useCart } from "@/lib/shop/cart";
+import { placeShopOrderFn } from "@/lib/shop-orders.functions";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/varukorg")({
@@ -13,8 +17,29 @@ export const Route = createFileRoute("/varukorg")({
 });
 
 function CartPage() {
-  const { lines, total, setQuantity, removeFromCart, placeOrder } = useCart();
+  const { lines, total, setQuantity, removeFromCart, clearCart } = useCart();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const placeOrder = useServerFn(placeShopOrderFn);
+  const [sending, setSending] = useState(false);
+
+  async function submitOrder() {
+    if (sending || lines.length === 0) return;
+    setSending(true);
+    try {
+      const order = await placeOrder({
+        data: { items: lines.map((l) => ({ productId: l.productId, quantity: l.quantity })) },
+      });
+      clearCart();
+      queryClient.invalidateQueries({ queryKey: ["my-shop-orders"] });
+      toast.success(`Beställning #${order.orderNumber} skickad!`);
+      navigate({ to: "/bestallningar/$id", params: { id: order.id } });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Beställningen kunde inte skickas.");
+    } finally {
+      setSending(false);
+    }
+  }
 
   const remainingToFreeShipping = FREE_SHIPPING_THRESHOLD - total;
 
@@ -24,9 +49,7 @@ function CartPage() {
         {lines.length === 0 ? (
           <div className="rounded-xl bg-card p-8 text-center shadow-sm">
             <ShoppingCart className="mx-auto h-10 w-10 text-muted-foreground" />
-            <p className="mt-3 text-sm font-semibold text-card-foreground">
-              Din varukorg är tom
-            </p>
+            <p className="mt-3 text-sm font-semibold text-card-foreground">Din varukorg är tom</p>
             <p className="mt-1 text-xs text-muted-foreground">
               Lägg till produkter så dyker de upp här.
             </p>
@@ -141,16 +164,11 @@ function CartPage() {
 
             <button
               type="button"
-              onClick={() => {
-                const order = placeOrder();
-                if (order) {
-                  toast.success(`Beställning #${order.orderNumber} skickad!`);
-                  navigate({ to: "/bestallningar/$id", params: { id: order.id } });
-                }
-              }}
-              className="w-full rounded-full bg-primary py-3.5 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/30 transition-transform active:scale-[0.98]"
+              onClick={submitOrder}
+              disabled={sending}
+              className="w-full rounded-full bg-primary py-3.5 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/30 transition-transform active:scale-[0.98] disabled:opacity-60"
             >
-              Skicka beställning · {formatPrice(total)}
+              {sending ? "Skickar…" : `Skicka beställning · ${formatPrice(total)}`}
             </button>
           </>
         )}
