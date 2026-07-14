@@ -2,9 +2,10 @@ import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Search } from "lucide-react";
 import { useState } from "react";
 import { z } from "zod";
-import { ProductCard } from "@/components/shop/cards";
+import { CampaignBubble, ProductCard } from "@/components/shop/cards";
 import { ShopShell } from "@/components/shop/ShopShell";
 import { CATEGORIES, getCategory, searchProducts } from "@/lib/shop/catalog";
+import { useShopExtras } from "@/lib/shop/use-shop-extras";
 import { cn } from "@/lib/utils";
 
 const searchSchema = z.object({
@@ -23,10 +24,24 @@ function ProductsPage() {
   const navigate = useNavigate({ from: Route.fullPath });
   const [query, setQuery] = useState(q ?? "");
 
+  const { customProducts, getCampaign } = useShopExtras();
+  const promo = getCampaign("product_promo");
+
   const activeCategory = kategori ? getCategory(kategori) : undefined;
-  const products = searchProducts(query).filter(
-    (p) => !activeCategory || p.category === activeCategory.id,
+  // Verkstadens egna publicerade produkter visas överst, följda av katalogen.
+  const q_ = query.trim().toLowerCase();
+  const matchingCustom = customProducts.filter(
+    (p) =>
+      (!activeCategory || p.category === activeCategory.id) &&
+      (!q_ ||
+        p.name.toLowerCase().includes(q_) ||
+        p.brand.toLowerCase().includes(q_) ||
+        p.description.toLowerCase().includes(q_)),
   );
+  const products = [
+    ...matchingCustom,
+    ...searchProducts(query).filter((p) => !activeCategory || p.category === activeCategory.id),
+  ];
 
   return (
     <ShopShell title="Produkter" backTo="/">
@@ -60,6 +75,8 @@ function ProductsPage() {
         {activeCategory ? (
           <p className="text-xs text-muted-foreground">{activeCategory.description}</p>
         ) : null}
+
+        {promo ? <CampaignBubble campaign={promo} /> : null}
 
         <div className="space-y-3">
           {products.map((product) => (

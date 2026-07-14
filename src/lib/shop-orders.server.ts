@@ -80,7 +80,7 @@ export async function getAccountInfo(userId: string): Promise<AccountInfo> {
 
 // Verkstaden en kunds ordrar hamnar hos: kundens kopplade verkstad, annars
 // utvecklarens verkstad (butikens standardverkstad).
-async function resolveOrderWorkshopId(userId: string): Promise<string> {
+export async function resolveOrderWorkshopId(userId: string): Promise<string> {
   const { data: prof } = await admin
     .from("profiles")
     .select("customer_of_workshop_id")
@@ -100,7 +100,7 @@ async function resolveOrderWorkshopId(userId: string): Promise<string> {
   return getWorkshopId(dev.id);
 }
 
-async function assertWorkshopAccount(userId: string): Promise<string> {
+export async function assertWorkshopAccount(userId: string): Promise<string> {
   const { data: prof } = await admin
     .from("profiles")
     .select("account_type")
@@ -119,24 +119,60 @@ export async function createShopOrder(
   items: Array<{ productId: string; quantity: number }>,
 ): Promise<ShopOrder> {
   if (items.length === 0) throw new Error("Varukorgen är tom.");
-  const lines = items.map((item) => {
-    const product = getProduct(item.productId);
-    if (!product) throw new Error(`Okänd produkt: ${item.productId}`);
-    return {
-      product_id: product.id,
-      name: product.name,
-      unit: product.unit,
-      unit_price: product.price,
-      quantity: item.quantity,
-    };
-  });
-  const total = lines.reduce((sum, l) => sum + l.unit_price * l.quantity, 0);
 
   const [workshopId, { data: prof }, email] = await Promise.all([
     resolveOrderWorkshopId(userId),
     admin.from("profiles").select("display_name, contact_phone").eq("id", userId).maybeSingle(),
     getUserAuthEmail(userId),
   ]);
+
+  // Priser hämtas alltid server-side: ur den statiska katalogen eller ur
+  // verkstadens publicerade egna produkter — aldrig från klienten.
+  const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const customIds = items
+    .map((i) => i.productId)
+    .filter((id) => !getProduct(id) && uuidRe.test(id));
+  const customMap = new Map<string, { name: string; unit: string | null; price: number }>();
+  if (customIds.length > 0) {
+    const { data: customs, error: customError } = await admin
+      .from("workshop_products")
+      .select("id, name, unit, price")
+      .in("id", customIds)
+      .eq("workshop_id", workshopId)
+      .eq("status", "published");
+    if (customError) throw new Error(customError.message);
+    for (const p of (customs ?? []) as Array<{
+      id: string;
+      name: string;
+      unit: string | null;
+      price: number;
+    }>) {
+      customMap.set(p.id, { name: p.name, unit: p.unit, price: Number(p.price) });
+    }
+  }
+
+  const lines = items.map((item) => {
+    const product = getProduct(item.productId);
+    if (product) {
+      return {
+        product_id: product.id,
+        name: product.name,
+        unit: product.unit,
+        unit_price: product.price,
+        quantity: item.quantity,
+      };
+    }
+    const custom = customMap.get(item.productId);
+    if (!custom) throw new Error(`Okänd produkt: ${item.productId}`);
+    return {
+      product_id: item.productId,
+      name: custom.name,
+      unit: custom.unit,
+      unit_price: custom.price,
+      quantity: item.quantity,
+    };
+  });
+  const total = lines.reduce((sum, l) => sum + l.unit_price * l.quantity, 0);
 
   const { data: order, error } = await admin
     .from("shop_orders")

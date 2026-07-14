@@ -1,7 +1,7 @@
 import { Link, Outlet, createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, ClipboardList, LogOut, MessageSquare, Settings } from "lucide-react";
+import { BarChart3, ClipboardList, LogOut, MessageSquare, Settings, Tag } from "lucide-react";
 import { useEffect } from "react";
 import {
   AccountSwitcherDropdown,
@@ -26,10 +26,11 @@ export const Route = createFileRoute("/verkstad")({
 });
 
 const NAV_ITEMS = [
-  { to: "/verkstad", label: "Beställningar", icon: ClipboardList, exact: true },
+  { to: "/verkstad", label: "Ordrar", icon: ClipboardList, exact: true },
+  { to: "/verkstad/produkter", label: "Produkter", icon: Tag, exact: false },
   { to: "/verkstad/statistik", label: "Statistik", icon: BarChart3, exact: false },
   { to: "/verkstad/chatt", label: "Chatt", icon: MessageSquare, exact: false },
-  { to: "/verkstad/installningar", label: "Inställningar", icon: Settings, exact: false },
+  { to: "/verkstad/installningar", label: "Mer", icon: Settings, exact: false },
 ] as const;
 
 function WorkshopLayout() {

@@ -1,13 +1,15 @@
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQueryClient } from "@tanstack/react-query";
-import { Minus, Plus, ShoppingCart, Trash2, Truck } from "lucide-react";
+import { Minus, Plus, ShoppingCart, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { CartShippingBubble } from "@/components/shop/cards";
 import { ShopShell } from "@/components/shop/ShopShell";
 import { CATEGORY_ICONS } from "@/components/shop/category-icons";
-import { FREE_SHIPPING_THRESHOLD, formatPrice, getCategory, getProduct } from "@/lib/shop/catalog";
+import { FREE_SHIPPING_THRESHOLD, formatPrice, getCategory } from "@/lib/shop/catalog";
 import { useCart } from "@/lib/shop/cart";
+import { useShopExtras } from "@/lib/shop/use-shop-extras";
 import { placeShopOrderFn } from "@/lib/shop-orders.functions";
 import { cn } from "@/lib/utils";
 
@@ -41,7 +43,11 @@ function CartPage() {
     }
   }
 
-  const remainingToFreeShipping = FREE_SHIPPING_THRESHOLD - total;
+  // Aktiv frifrakt-kampanj styr gränsen; annars gäller standardgränsen.
+  const { findProduct, getCampaign } = useShopExtras();
+  const shippingCampaign = getCampaign("free_shipping");
+  const freeShippingLimit = shippingCampaign?.minOrder ?? FREE_SHIPPING_THRESHOLD;
+  const remainingToFreeShipping = freeShippingLimit - total;
 
   return (
     <ShopShell title="Varukorg" backTo="/">
@@ -65,10 +71,9 @@ function CartPage() {
           <>
             <div className="space-y-3">
               {lines.map((line) => {
-                const product = getProduct(line.productId);
-                if (!product) return null;
-                const category = getCategory(product.category);
-                const Icon = CATEGORY_ICONS[product.category];
+                const product = findProduct(line.productId);
+                const category = product ? getCategory(product.category) : undefined;
+                const Icon = product ? CATEGORY_ICONS[product.category] : ShoppingCart;
                 return (
                   <div
                     key={line.productId}
@@ -76,20 +81,29 @@ function CartPage() {
                   >
                     <Link
                       to="/produkt/$id"
-                      params={{ id: product.id }}
+                      params={{ id: line.productId }}
                       className={cn(
-                        "flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br",
+                        "flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gradient-to-br",
                         category?.gradient ?? "from-slate-700 to-slate-900",
                       )}
                     >
-                      <Icon className="h-6 w-6 text-white/80" />
+                      {product?.imageUrl ? (
+                        <img
+                          src={product.imageUrl}
+                          alt={line.name}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <Icon className="h-6 w-6 text-white/80" />
+                      )}
                     </Link>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold text-card-foreground">
-                        {product.name}
+                        {line.name}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {formatPrice(product.price)} · {product.unit}
+                        {formatPrice(line.unitPrice)}
+                        {line.unit ? ` · ${line.unit}` : ""}
                       </p>
                       <div className="mt-2 flex items-center gap-2">
                         <button
@@ -115,11 +129,11 @@ function CartPage() {
                     </div>
                     <div className="flex flex-col items-end gap-2">
                       <p className="text-sm font-bold text-card-foreground">
-                        {formatPrice(product.price * line.quantity)}
+                        {formatPrice(line.unitPrice * line.quantity)}
                       </p>
                       <button
                         type="button"
-                        aria-label={`Ta bort ${product.name}`}
+                        aria-label={`Ta bort ${line.name}`}
                         onClick={() => removeFromCart(line.productId)}
                         className="text-muted-foreground transition-colors hover:text-destructive"
                       >
@@ -131,18 +145,11 @@ function CartPage() {
               })}
             </div>
 
-            <div className="flex items-center gap-3 rounded-xl bg-neutral-900 p-4 text-white">
-              <Truck className="h-6 w-6 shrink-0 text-primary" />
-              <p className="text-sm">
-                {remainingToFreeShipping > 0 ? (
-                  <>
-                    Handla för <b>{formatPrice(remainingToFreeShipping)}</b> till för fri frakt
-                  </>
-                ) : (
-                  <b>Du har fri frakt på denna beställning!</b>
-                )}
-              </p>
-            </div>
+            <CartShippingBubble
+              minOrder={freeShippingLimit}
+              title={shippingCampaign?.title}
+              total={total}
+            />
 
             <div className="rounded-xl bg-card p-4 shadow-sm">
               <div className="flex items-center justify-between text-sm text-muted-foreground">

@@ -19,6 +19,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as VerkstadIndexRouteImport } from './routes/verkstad.index'
 import { Route as BestallningarIndexRouteImport } from './routes/bestallningar.index'
 import { Route as VerkstadStatistikRouteImport } from './routes/verkstad.statistik'
+import { Route as VerkstadProdukterRouteImport } from './routes/verkstad.produkter'
 import { Route as VerkstadInstallningarRouteImport } from './routes/verkstad.installningar'
 import { Route as VerkstadChattRouteImport } from './routes/verkstad.chatt'
 import { Route as ProduktIdRouteImport } from './routes/produkt.$id'
@@ -102,6 +103,11 @@ const BestallningarIndexRoute = BestallningarIndexRouteImport.update({
 const VerkstadStatistikRoute = VerkstadStatistikRouteImport.update({
   id: '/statistik',
   path: '/statistik',
+  getParentRoute: () => VerkstadRoute,
+} as any)
+const VerkstadProdukterRoute = VerkstadProdukterRouteImport.update({
+  id: '/produkter',
+  path: '/produkter',
   getParentRoute: () => VerkstadRoute,
 } as any)
 const VerkstadInstallningarRoute = VerkstadInstallningarRouteImport.update({
@@ -320,6 +326,7 @@ export interface FileRoutesByFullPath {
   '/produkt/$id': typeof ProduktIdRoute
   '/verkstad/chatt': typeof VerkstadChattRoute
   '/verkstad/installningar': typeof VerkstadInstallningarRoute
+  '/verkstad/produkter': typeof VerkstadProdukterRoute
   '/verkstad/statistik': typeof VerkstadStatistikRoute
   '/bestallningar/': typeof BestallningarIndexRoute
   '/verkstad/': typeof VerkstadIndexRoute
@@ -365,6 +372,7 @@ export interface FileRoutesByTo {
   '/produkt/$id': typeof ProduktIdRoute
   '/verkstad/chatt': typeof VerkstadChattRoute
   '/verkstad/installningar': typeof VerkstadInstallningarRoute
+  '/verkstad/produkter': typeof VerkstadProdukterRoute
   '/verkstad/statistik': typeof VerkstadStatistikRoute
   '/bestallningar': typeof BestallningarIndexRoute
   '/verkstad': typeof VerkstadIndexRoute
@@ -413,6 +421,7 @@ export interface FileRoutesById {
   '/produkt/$id': typeof ProduktIdRoute
   '/verkstad/chatt': typeof VerkstadChattRoute
   '/verkstad/installningar': typeof VerkstadInstallningarRoute
+  '/verkstad/produkter': typeof VerkstadProdukterRoute
   '/verkstad/statistik': typeof VerkstadStatistikRoute
   '/bestallningar/': typeof BestallningarIndexRoute
   '/verkstad/': typeof VerkstadIndexRoute
@@ -461,6 +470,7 @@ export interface FileRouteTypes {
     | '/produkt/$id'
     | '/verkstad/chatt'
     | '/verkstad/installningar'
+    | '/verkstad/produkter'
     | '/verkstad/statistik'
     | '/bestallningar/'
     | '/verkstad/'
@@ -506,6 +516,7 @@ export interface FileRouteTypes {
     | '/produkt/$id'
     | '/verkstad/chatt'
     | '/verkstad/installningar'
+    | '/verkstad/produkter'
     | '/verkstad/statistik'
     | '/bestallningar'
     | '/verkstad'
@@ -553,6 +564,7 @@ export interface FileRouteTypes {
     | '/produkt/$id'
     | '/verkstad/chatt'
     | '/verkstad/installningar'
+    | '/verkstad/produkter'
     | '/verkstad/statistik'
     | '/bestallningar/'
     | '/verkstad/'
@@ -673,6 +685,13 @@ declare module '@tanstack/react-router' {
       path: '/statistik'
       fullPath: '/verkstad/statistik'
       preLoaderRoute: typeof VerkstadStatistikRouteImport
+      parentRoute: typeof VerkstadRoute
+    }
+    '/verkstad/produkter': {
+      id: '/verkstad/produkter'
+      path: '/produkter'
+      fullPath: '/verkstad/produkter'
+      preLoaderRoute: typeof VerkstadProdukterRouteImport
       parentRoute: typeof VerkstadRoute
     }
     '/verkstad/installningar': {
@@ -972,6 +991,7 @@ const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
 interface VerkstadRouteChildren {
   VerkstadChattRoute: typeof VerkstadChattRoute
   VerkstadInstallningarRoute: typeof VerkstadInstallningarRoute
+  VerkstadProdukterRoute: typeof VerkstadProdukterRoute
   VerkstadStatistikRoute: typeof VerkstadStatistikRoute
   VerkstadIndexRoute: typeof VerkstadIndexRoute
 }
@@ -979,6 +999,7 @@ interface VerkstadRouteChildren {
 const VerkstadRouteChildren: VerkstadRouteChildren = {
   VerkstadChattRoute: VerkstadChattRoute,
   VerkstadInstallningarRoute: VerkstadInstallningarRoute,
+  VerkstadProdukterRoute: VerkstadProdukterRoute,
   VerkstadStatistikRoute: VerkstadStatistikRoute,
   VerkstadIndexRoute: VerkstadIndexRoute,
 }

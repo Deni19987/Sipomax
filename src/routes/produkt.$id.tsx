@@ -4,8 +4,9 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { ShopShell } from "@/components/shop/ShopShell";
 import { CATEGORY_ICONS } from "@/components/shop/category-icons";
-import { formatPrice, getCategory, getProduct } from "@/lib/shop/catalog";
+import { formatPrice, getCategory } from "@/lib/shop/catalog";
 import { useCart } from "@/lib/shop/cart";
+import { useShopExtras } from "@/lib/shop/use-shop-extras";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/produkt/$id")({
@@ -15,7 +16,8 @@ export const Route = createFileRoute("/produkt/$id")({
 
 function ProductPage() {
   const { id } = Route.useParams();
-  const product = getProduct(id);
+  const { findProduct } = useShopExtras();
+  const product = findProduct(id);
   const { addToCart } = useCart();
   const [quantity, setQuantity] = useState(1);
 
@@ -48,11 +50,15 @@ function ProductPage() {
       <div className="space-y-4 px-4 pt-4">
         <div
           className={cn(
-            "flex h-48 items-center justify-center rounded-2xl bg-gradient-to-br shadow-md",
+            "flex h-48 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br shadow-md",
             category?.gradient ?? "from-slate-700 to-slate-900",
           )}
         >
-          <Icon className="h-16 w-16 text-white/70" />
+          {product.imageUrl ? (
+            <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover" />
+          ) : (
+            <Icon className="h-16 w-16 text-white/70" />
+          )}
         </div>
 
         <div className="rounded-xl bg-card p-4 shadow-sm">
@@ -99,7 +105,7 @@ function ProductPage() {
           <button
             type="button"
             onClick={() => {
-              addToCart(product.id, quantity);
+              addToCart(product, quantity);
               toast.success(`${product.name} tillagd i varukorgen`, {
                 icon: <Check className="h-4 w-4" />,
               });
