@@ -1,10 +1,13 @@
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
+import { useQuery } from "@tanstack/react-query";
 import { Search, UserRound } from "lucide-react";
 import { useEffect, useState } from "react";
 import { FreeShippingBanner, CategoryCard, OrderCard } from "@/components/shop/cards";
 import { ShopShell, SipomaxWordmark } from "@/components/shop/ShopShell";
+import { useAuth } from "@/hooks/use-auth";
 import { CATEGORIES } from "@/lib/shop/catalog";
-import { useCart } from "@/lib/shop/cart";
+import { getMyAccountInfo, listMyShopOrdersFn } from "@/lib/shop-orders.functions";
 
 export const Route = createFileRoute("/")({
   // ssr: false så att varukorg/beställningar (localStorage) inte ger
@@ -28,9 +31,30 @@ function isAuthLanding(): boolean {
 }
 
 function HomePage() {
-  const { orders } = useCart();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [query, setQuery] = useState("");
+
+  const fetchAccountInfo = useServerFn(getMyAccountInfo);
+  const fetchOrders = useServerFn(listMyShopOrdersFn);
+  const { data: accountInfo } = useQuery({
+    queryKey: ["my-account-info"],
+    queryFn: () => fetchAccountInfo(),
+    enabled: !!user,
+  });
+  const { data: orders } = useQuery({
+    queryKey: ["my-shop-orders"],
+    queryFn: () => fetchOrders(),
+    enabled: !!user,
+  });
+
+  // Verkstadskonton (inkl. utvecklarkontot) landar i verkstadsvyn — butiken
+  // är kundernas vy. Utvecklaren når butiken genom att byta till ett kundkonto.
+  useEffect(() => {
+    if (accountInfo?.accountType === "workshop" && !isAuthLanding()) {
+      navigate({ to: "/verkstad", replace: true });
+    }
+  }, [accountInfo, navigate]);
 
   // When we've just arrived from a successful login, claim the shared
   // `brand-hero` view-transition-name so the login page's red panel morphs
@@ -62,7 +86,7 @@ function HomePage() {
     }
   }, []);
 
-  const recentOrders = orders.slice(0, 3);
+  const recentOrders = (orders ?? []).slice(0, 3);
 
   return (
     <ShopShell>

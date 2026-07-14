@@ -1,8 +1,11 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
+import { useQuery } from "@tanstack/react-query";
 import { FileText, Package } from "lucide-react";
 import { ShopShell } from "@/components/shop/ShopShell";
 import { formatPrice } from "@/lib/shop/catalog";
-import { ORDER_STATUS_LABELS, getOrder, useCart } from "@/lib/shop/cart";
+import { ORDER_STATUS_LABELS } from "@/lib/shop/orders";
+import { getMyShopOrderFn } from "@/lib/shop-orders.functions";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/bestallningar/$id")({
@@ -12,10 +15,30 @@ export const Route = createFileRoute("/bestallningar/$id")({
 
 function OrderDetailPage() {
   const { id } = Route.useParams();
-  const { orders } = useCart();
-  const order = getOrder(orders, id);
+  const fetchOrder = useServerFn(getMyShopOrderFn);
+  const {
+    data: order,
+    isLoading,
+    isError,
+  } = useQuery({
+    queryKey: ["my-shop-order", id],
+    queryFn: () => fetchOrder({ data: { orderId: id } }),
+    retry: false,
+  });
 
-  if (!order) {
+  if (isLoading) {
+    return (
+      <ShopShell title="Beställning" backTo="/bestallningar">
+        <div className="px-4 pt-6">
+          <div className="rounded-xl bg-card p-6 text-center shadow-sm">
+            <p className="text-sm text-muted-foreground">Laddar beställning…</p>
+          </div>
+        </div>
+      </ShopShell>
+    );
+  }
+
+  if (isError || !order) {
     return (
       <ShopShell title="Beställning" backTo="/bestallningar">
         <div className="px-4 pt-6">
