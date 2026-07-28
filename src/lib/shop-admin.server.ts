@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { assertWorkshopAccount, resolveOrderWorkshopId } from "./shop-orders.server";
+import { PRODUCTS } from "./shop/catalog";
 import type {
   CampaignTemplate,
   ProductStatus,
@@ -67,10 +68,50 @@ function rowToCampaign(row: CampaignRow): WorkshopCampaign {
   };
 }
 
+// Kopierar butikens statiska baskatalog in i en verkstads egna produkter första
+// gången den behövs. Idempotent tack vare catalog_key + partiellt unikt index —
+// bara produkter som saknas seedas, och redigeringar/borttagningar rörs aldrig.
+// Detta gör att kundvyn och verkstadens "Mina produkter" alltid speglar samma
+// data, och nya verkstäder får hela sortimentet automatiskt.
+async function ensureCatalogSeeded(workshopId: string): Promise<void> {
+  const { data: existing, error } = await admin
+    .from("workshop_products")
+    .select("catalog_key")
+    .eq("workshop_id", workshopId)
+    .not("catalog_key", "is", null);
+  if (error) throw new Error(error.message);
+
+  const seeded = new Set((existing ?? []).map((r) => (r as { catalog_key: string }).catalog_key));
+  const missing = PRODUCTS.filter((p) => !seeded.has(p.id));
+  if (missing.length === 0) return;
+
+  const rows = missing.map((p) => ({
+    workshop_id: workshopId,
+    catalog_key: p.id,
+    name: p.name,
+    brand: p.brand,
+    category: p.category,
+    description: p.description,
+    price: p.price,
+    unit: p.unit,
+    status: "published" as const,
+  }));
+
+  // ignoreDuplicates skyddar mot kapplöpning om två läsningar seedar samtidigt.
+  const { error: insertError } = await admin
+    .from("workshop_products")
+    .upsert(rows, { onConflict: "workshop_id,catalog_key", ignoreDuplicates: true });
+  if (insertError) {
+    // Blockera aldrig en läsning för att seedningen strular — logga och gå vidare.
+    console.error("[ensureCatalogSeeded]", insertError.message);
+  }
+}
+
 // ── Produkter (verkstadsvyn) ────────────────────────────────────────────────
 
 export async function listWorkshopProducts(userId: string): Promise<WorkshopProduct[]> {
   const workshopId = await assertWorkshopAccount(userId);
+  await ensureCatalogSeeded(workshopId);
   const { data, error } = await admin
     .from("workshop_products")
     .select(PRODUCT_SELECT)
@@ -230,6 +271,7 @@ export async function getCustomerShopExtras(userId: string): Promise<{
   campaigns: WorkshopCampaign[];
 }> {
   const workshopId = await resolveOrderWorkshopId(userId);
+  await ensureCatalogSeeded(workshopId);
   const [{ data: products, error: productError }, { data: campaigns, error: campaignError }] =
     await Promise.all([
       admin

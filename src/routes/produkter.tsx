@@ -4,7 +4,7 @@ import { useState } from "react";
 import { z } from "zod";
 import { CampaignBubble, ProductCard } from "@/components/shop/cards";
 import { ShopShell } from "@/components/shop/ShopShell";
-import { CATEGORIES, getCategory, searchProducts } from "@/lib/shop/catalog";
+import { CATEGORIES, getCategory } from "@/lib/shop/catalog";
 import { useShopExtras } from "@/lib/shop/use-shop-extras";
 import { cn } from "@/lib/utils";
 
@@ -28,9 +28,10 @@ function ProductsPage() {
   const promo = getCampaign("product_promo");
 
   const activeCategory = kategori ? getCategory(kategori) : undefined;
-  // Verkstadens egna publicerade produkter visas överst, följda av katalogen.
+  // Butiken drivs helt av verkstadens publicerade produkter (workshop_products) —
+  // baskatalogen seedas in där, så det kunden ser = verkstadens "Mina produkter".
   const q_ = query.trim().toLowerCase();
-  const matchingCustom = customProducts.filter(
+  const products = customProducts.filter(
     (p) =>
       (!activeCategory || p.category === activeCategory.id) &&
       (!q_ ||
@@ -38,10 +39,6 @@ function ProductsPage() {
         p.brand.toLowerCase().includes(q_) ||
         p.description.toLowerCase().includes(q_)),
   );
-  const products = [
-    ...matchingCustom,
-    ...searchProducts(query).filter((p) => !activeCategory || p.category === activeCategory.id),
-  ];
 
   return (
     <ShopShell title="Produkter" backTo="/">
