@@ -121,12 +121,19 @@ export function ChatThread({
 
   return (
     <div
-      className={cn("flex flex-col", variant === "page" ? "min-h-[calc(100vh-12rem)]" : "gap-3")}
+      className={cn(
+        "flex flex-col",
+        // Mobil: sidan växer och komponeraren klistrar sig ovanför bottenmenyn.
+        // Desktop: tråden fyller sin panel och bara meddelandelistan scrollar.
+        variant === "page" ? "min-h-[calc(100vh-12rem)] lg:min-h-0 lg:flex-1" : "gap-3",
+      )}
     >
       <div
         className={cn(
           "flex-1 space-y-3",
-          variant === "page" ? "px-4 py-4" : "max-h-96 overflow-y-auto pr-1",
+          variant === "page"
+            ? "px-4 py-4 lg:min-h-0 lg:overflow-y-auto"
+            : "max-h-96 overflow-y-auto pr-1 lg:max-h-[28rem]",
         )}
       >
         {isLoading ? (
@@ -147,7 +154,11 @@ export function ChatThread({
         <div ref={bottomRef} />
       </div>
 
-      <div className={cn(variant === "page" && "sticky bottom-[3.6rem] px-4 pb-2")}>
+      <div
+        className={cn(
+          variant === "page" && "sticky bottom-[3.6rem] px-4 pb-2 lg:static lg:pb-4 lg:pt-0",
+        )}
+      >
         <Composer onSubmit={submit} orderId={orderId} />
       </div>
     </div>

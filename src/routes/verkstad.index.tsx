@@ -131,30 +131,30 @@ function OrderBoard() {
   const unreadTotal = (orders ?? []).reduce((sum, o) => sum + (o.unreadCount ?? 0), 0);
 
   return (
-    <div className="space-y-3 px-4 pt-4">
-      <div className="flex items-start justify-between gap-3">
+    <div className="space-y-3 px-4 pt-4 lg:space-y-4 lg:pt-8">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h1 className="text-lg font-bold text-foreground">Beställningar</h1>
-          <p className="text-xs text-muted-foreground">
+          <h1 className="text-lg font-bold text-foreground lg:text-2xl">Beställningar</h1>
+          <p className="text-xs text-muted-foreground lg:text-sm">
             {newCount > 0
               ? `${newCount} ${newCount === 1 ? "ny beställning väntar" : "nya beställningar väntar"}`
               : "Inga nya beställningar just nu"}
             {unreadTotal > 0 ? ` · ${unreadTotal} olästa kommentarer` : ""}
           </p>
         </div>
+
+        <label className="flex items-center gap-2 rounded-xl bg-card px-3 py-2 shadow-sm lg:w-96">
+          <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Sök ordernummer, kund eller produkt…"
+            className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+          />
+        </label>
       </div>
 
-      <label className="flex items-center gap-2 rounded-xl bg-card px-3 py-2 shadow-sm">
-        <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Sök ordernummer, kund eller produkt…"
-          className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
-        />
-      </label>
-
-      <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
+      <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 lg:mx-0 lg:flex-wrap lg:px-0">
         <FilterChip
           label="Alla"
           count={counts.alla}
@@ -183,6 +183,7 @@ function OrderBoard() {
         </div>
       ) : visible.length > 0 ? (
         <div className="overflow-hidden rounded-xl bg-card shadow-sm">
+          <OrderListHeader />
           {visible.map((order, index) => (
             <OrderRow key={order.id} order={order} withBorder={index > 0} />
           ))}
@@ -240,6 +241,30 @@ function FilterChip({
   );
 }
 
+// Kolumnmallen delas av rubrikraden och orderraderna på desktop.
+const ROW_GRID =
+  "lg:grid lg:grid-cols-[2.5rem_9rem_minmax(0,1fr)_6rem_7rem_9rem_5rem_1.25rem] lg:items-center lg:gap-4";
+
+function OrderListHeader() {
+  return (
+    <div
+      className={cn(
+        "hidden border-b border-border bg-muted/40 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground",
+        ROW_GRID,
+      )}
+    >
+      <span />
+      <span>Order</span>
+      <span>Kund</span>
+      <span className="text-right">Artiklar</span>
+      <span className="text-right">Summa</span>
+      <span>Inkom</span>
+      <span className="text-right">Chatt</span>
+      <span />
+    </div>
+  );
+}
+
 function OrderRow({ order, withBorder }: { order: ShopOrder; withBorder: boolean }) {
   const unread = order.unreadCount ?? 0;
   return (
@@ -248,6 +273,7 @@ function OrderRow({ order, withBorder }: { order: ShopOrder; withBorder: boolean
       search={{ order: order.id }}
       className={cn(
         "flex items-center gap-3 p-4 transition-colors hover:bg-accent",
+        ROW_GRID,
         withBorder && "border-t border-border",
       )}
     >
@@ -260,7 +286,8 @@ function OrderRow({ order, withBorder }: { order: ShopOrder; withBorder: boolean
           )}
         />
       </div>
-      <div className="min-w-0 flex-1">
+
+      <div className="min-w-0 flex-1 lg:flex-none">
         <div className="flex items-center gap-2">
           <p className="text-sm font-bold text-card-foreground">#{order.orderNumber}</p>
           <span
@@ -272,13 +299,30 @@ function OrderRow({ order, withBorder }: { order: ShopOrder; withBorder: boolean
             {ORDER_STATUS_LABELS[order.status]}
           </span>
         </div>
-        <p className="truncate text-xs text-muted-foreground">
+        {/* Sammanfattning på mobil — på desktop bor uppgifterna i egna kolumner. */}
+        <p className="truncate text-xs text-muted-foreground lg:hidden">
           {order.customerName || order.customerEmail || "Okänd kund"} · {itemCount(order)} art. ·{" "}
           {formatPrice(order.total)}
         </p>
-        <p className="text-[11px] text-muted-foreground">{formatRelative(order.createdAt)}</p>
+        <p className="text-[11px] text-muted-foreground lg:hidden">
+          {formatRelative(order.createdAt)}
+        </p>
       </div>
-      <div className="flex shrink-0 items-center gap-2">
+
+      <p className="hidden min-w-0 truncate text-sm text-card-foreground lg:block">
+        {order.customerName || order.customerEmail || "Okänd kund"}
+      </p>
+      <p className="hidden text-right text-sm text-muted-foreground lg:block">
+        {itemCount(order)} st
+      </p>
+      <p className="hidden text-right text-sm font-semibold text-card-foreground lg:block">
+        {formatPrice(order.total)}
+      </p>
+      <p className="hidden text-xs text-muted-foreground lg:block">
+        {formatRelative(order.createdAt)}
+      </p>
+
+      <div className="flex shrink-0 items-center gap-2 lg:justify-end">
         {unread > 0 && (
           <span
             className={cn(
@@ -296,8 +340,10 @@ function OrderRow({ order, withBorder }: { order: ShopOrder; withBorder: boolean
             {unread}
           </span>
         )}
-        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+        <ChevronRight className="h-4 w-4 text-muted-foreground lg:hidden" />
       </div>
+
+      <ChevronRight className="hidden h-4 w-4 text-muted-foreground lg:block" />
     </Link>
   );
 }
@@ -367,7 +413,7 @@ function OrderDetail({ orderId }: { orderId: string }) {
   const next = nextOrderStatus(order.status);
 
   return (
-    <div className="space-y-3 px-4 pt-4">
+    <div className="space-y-3 px-4 pt-4 lg:space-y-4 lg:pt-8">
       <div className="flex items-center gap-3">
         <button
           type="button"
@@ -393,154 +439,161 @@ function OrderDetail({ orderId }: { orderId: string }) {
         </span>
       </div>
 
-      {/* Statusflöde */}
-      <div className="rounded-xl bg-card p-4 shadow-sm">
-        <p className="text-xs font-semibold text-muted-foreground">Status i flödet</p>
-        <div className="mt-3 flex items-center gap-1">
-          {ORDER_STATUSES.map((status, index) => {
-            const reached = ORDER_STATUSES.indexOf(order.status) >= index;
-            return (
-              <div key={status} className="flex flex-1 flex-col items-center gap-1">
-                <div className="flex w-full items-center">
-                  <span
-                    className={cn(
-                      "h-1 flex-1 rounded-full",
-                      index === 0 ? "bg-transparent" : reached ? "bg-primary" : "bg-muted",
-                    )}
-                  />
-                  <span
-                    className={cn(
-                      "h-2.5 w-2.5 shrink-0 rounded-full",
-                      reached ? ORDER_STATUS_DOT[status] : "bg-muted",
-                    )}
-                  />
-                  <span
-                    className={cn(
-                      "h-1 flex-1 rounded-full",
-                      index === ORDER_STATUSES.length - 1
-                        ? "bg-transparent"
-                        : ORDER_STATUSES.indexOf(order.status) > index
-                          ? "bg-primary"
-                          : "bg-muted",
-                    )}
-                  />
-                </div>
-                <span
-                  className={cn(
-                    "text-center text-[10px]",
-                    reached ? "font-semibold text-foreground" : "text-muted-foreground",
-                  )}
-                >
-                  {ORDER_STATUS_LABELS[status]}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-        <div className="mt-4 flex items-center gap-2">
-          <Select
-            value={order.status}
-            onValueChange={(status) => statusMutation.mutate(status as ShopOrderStatus)}
-            disabled={statusMutation.isPending}
-          >
-            <SelectTrigger className="h-9 flex-1 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {ORDER_STATUSES.map((status) => (
-                <SelectItem key={status} value={status} className="text-xs">
-                  {ORDER_STATUS_LABELS[status]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {next && (
-            <button
-              type="button"
-              onClick={() => statusMutation.mutate(next)}
-              disabled={statusMutation.isPending}
-              className="flex h-9 shrink-0 items-center gap-1.5 rounded-md bg-primary px-3 text-xs font-semibold text-primary-foreground disabled:opacity-50"
-            >
-              {ORDER_STATUS_LABELS[next]}
-              <ArrowRight className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Kund */}
-      <div className="rounded-xl bg-card p-4 shadow-sm">
-        <p className="flex items-center gap-2 text-sm font-semibold text-card-foreground">
-          <UserRound className="h-4 w-4 shrink-0 text-primary" />
-          {order.customerName || "Okänd kund"}
-        </p>
-        <div className="mt-2 space-y-1 text-xs text-muted-foreground">
-          {order.customerEmail && (
-            <a
-              href={`mailto:${order.customerEmail}`}
-              className="flex items-center gap-2 hover:text-foreground"
-            >
-              <Mail className="h-3.5 w-3.5 shrink-0" /> {order.customerEmail}
-            </a>
-          )}
-          {order.customerPhone && (
-            <a
-              href={`tel:${order.customerPhone}`}
-              className="flex items-center gap-2 hover:text-foreground"
-            >
-              <Phone className="h-3.5 w-3.5 shrink-0" /> {order.customerPhone}
-            </a>
-          )}
-          {!order.customerEmail && !order.customerPhone && (
-            <p>Inga kontaktuppgifter sparade på kunden.</p>
-          )}
-        </div>
-      </div>
-
-      {/* Rader */}
-      <div className="rounded-xl bg-card p-4 shadow-sm">
-        <p className="text-xs font-semibold text-muted-foreground">
-          Innehåll · {itemCount(order)} artiklar
-        </p>
-        <div className="mt-3 space-y-2">
-          {order.lines.map((line) => (
-            <div key={line.productId} className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-sm text-card-foreground">{line.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {line.quantity} × {formatPrice(line.unitPrice)}
-                  {line.unit ? ` · ${line.unit}` : ""}
-                </p>
-              </div>
-              <p className="whitespace-nowrap text-sm font-semibold text-card-foreground">
-                {formatPrice(line.unitPrice * line.quantity)}
-              </p>
+      {/* Desktop: orderuppgifter till vänster, tråden i en egen spalt till höger. */}
+      <div className="space-y-3 lg:grid lg:grid-cols-[minmax(0,1fr)_26rem] lg:items-start lg:gap-6 lg:space-y-0">
+        <div className="space-y-3 lg:space-y-4">
+          {/* Statusflöde */}
+          <div className="rounded-xl bg-card p-4 shadow-sm">
+            <p className="text-xs font-semibold text-muted-foreground">Status i flödet</p>
+            <div className="mt-3 flex items-center gap-1">
+              {ORDER_STATUSES.map((status, index) => {
+                const reached = ORDER_STATUSES.indexOf(order.status) >= index;
+                return (
+                  <div key={status} className="flex flex-1 flex-col items-center gap-1">
+                    <div className="flex w-full items-center">
+                      <span
+                        className={cn(
+                          "h-1 flex-1 rounded-full",
+                          index === 0 ? "bg-transparent" : reached ? "bg-primary" : "bg-muted",
+                        )}
+                      />
+                      <span
+                        className={cn(
+                          "h-2.5 w-2.5 shrink-0 rounded-full",
+                          reached ? ORDER_STATUS_DOT[status] : "bg-muted",
+                        )}
+                      />
+                      <span
+                        className={cn(
+                          "h-1 flex-1 rounded-full",
+                          index === ORDER_STATUSES.length - 1
+                            ? "bg-transparent"
+                            : ORDER_STATUSES.indexOf(order.status) > index
+                              ? "bg-primary"
+                              : "bg-muted",
+                        )}
+                      />
+                    </div>
+                    <span
+                      className={cn(
+                        "text-center text-[10px]",
+                        reached ? "font-semibold text-foreground" : "text-muted-foreground",
+                      )}
+                    >
+                      {ORDER_STATUS_LABELS[status]}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
-          ))}
-        </div>
-        <div className="mt-3 flex items-center justify-between border-t border-border pt-3">
-          <span className="text-sm font-bold text-card-foreground">Totalt</span>
-          <span className="text-sm font-bold text-card-foreground">{formatPrice(order.total)}</span>
-        </div>
-      </div>
+            <div className="mt-4 flex items-center gap-2">
+              <Select
+                value={order.status}
+                onValueChange={(status) => statusMutation.mutate(status as ShopOrderStatus)}
+                disabled={statusMutation.isPending}
+              >
+                <SelectTrigger className="h-9 flex-1 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ORDER_STATUSES.map((status) => (
+                    <SelectItem key={status} value={status} className="text-xs">
+                      {ORDER_STATUS_LABELS[status]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {next && (
+                <button
+                  type="button"
+                  onClick={() => statusMutation.mutate(next)}
+                  disabled={statusMutation.isPending}
+                  className="flex h-9 shrink-0 items-center gap-1.5 rounded-md bg-primary px-3 text-xs font-semibold text-primary-foreground disabled:opacity-50"
+                >
+                  {ORDER_STATUS_LABELS[next]}
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
 
-      <InternalNote orderId={order.id} note={order.internalNote ?? ""} />
+          {/* Kund */}
+          <div className="rounded-xl bg-card p-4 shadow-sm">
+            <p className="flex items-center gap-2 text-sm font-semibold text-card-foreground">
+              <UserRound className="h-4 w-4 shrink-0 text-primary" />
+              {order.customerName || "Okänd kund"}
+            </p>
+            <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+              {order.customerEmail && (
+                <a
+                  href={`mailto:${order.customerEmail}`}
+                  className="flex items-center gap-2 hover:text-foreground"
+                >
+                  <Mail className="h-3.5 w-3.5 shrink-0" /> {order.customerEmail}
+                </a>
+              )}
+              {order.customerPhone && (
+                <a
+                  href={`tel:${order.customerPhone}`}
+                  className="flex items-center gap-2 hover:text-foreground"
+                >
+                  <Phone className="h-3.5 w-3.5 shrink-0" /> {order.customerPhone}
+                </a>
+              )}
+              {!order.customerEmail && !order.customerPhone && (
+                <p>Inga kontaktuppgifter sparade på kunden.</p>
+              )}
+            </div>
+          </div>
 
-      {/* Ordertråd */}
-      <div className="rounded-xl bg-card p-4 shadow-sm">
-        <div className="flex items-center gap-2">
-          <MessageSquare className="h-4 w-4 shrink-0 text-primary" />
-          <p className="text-sm font-semibold text-card-foreground">Kommentarer om ordern</p>
+          {/* Rader */}
+          <div className="rounded-xl bg-card p-4 shadow-sm">
+            <p className="text-xs font-semibold text-muted-foreground">
+              Innehåll · {itemCount(order)} artiklar
+            </p>
+            <div className="mt-3 space-y-2">
+              {order.lines.map((line) => (
+                <div key={line.productId} className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm text-card-foreground">{line.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {line.quantity} × {formatPrice(line.unitPrice)}
+                      {line.unit ? ` · ${line.unit}` : ""}
+                    </p>
+                  </div>
+                  <p className="whitespace-nowrap text-sm font-semibold text-card-foreground">
+                    {formatPrice(line.unitPrice * line.quantity)}
+                  </p>
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 flex items-center justify-between border-t border-border pt-3">
+              <span className="text-sm font-bold text-card-foreground">Totalt</span>
+              <span className="text-sm font-bold text-card-foreground">
+                {formatPrice(order.total)}
+              </span>
+            </div>
+          </div>
+
+          <InternalNote orderId={order.id} note={order.internalNote ?? ""} />
         </div>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Alla i verkstaden ser tråden. Tagga en kollega med @ så får hen en notis.
-        </p>
-        <div className="mt-3">
-          <ChatThread
-            orderId={order.id}
-            variant="panel"
-            emptyHint="Skriv en kommentar om ordern — hela verkstaden ser den."
-          />
+
+        {/* Ordertråd */}
+        <div className="rounded-xl bg-card p-4 shadow-sm lg:sticky lg:top-6">
+          <div className="flex items-center gap-2">
+            <MessageSquare className="h-4 w-4 shrink-0 text-primary" />
+            <p className="text-sm font-semibold text-card-foreground">Kommentarer om ordern</p>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Alla i verkstaden ser tråden. Tagga en kollega med @ så får hen en notis.
+          </p>
+          <div className="mt-3">
+            <ChatThread
+              orderId={order.id}
+              variant="panel"
+              emptyHint="Skriv en kommentar om ordern — hela verkstaden ser den."
+            />
+          </div>
         </div>
       </div>
     </div>

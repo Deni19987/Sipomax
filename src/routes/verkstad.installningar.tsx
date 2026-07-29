@@ -27,10 +27,12 @@ function WorkshopSettingsPage() {
   });
 
   return (
-    <div className="space-y-4 px-4 pt-4">
-      <h1 className="text-lg font-bold text-foreground">Inställningar</h1>
-      <WorkshopProfileCard />
-      <TeamCard isDeveloper={accountInfo?.isDeveloper ?? false} />
+    <div className="space-y-4 px-4 pt-4 lg:pt-8">
+      <h1 className="text-lg font-bold text-foreground lg:text-2xl">Inställningar</h1>
+      <div className="space-y-4 lg:grid lg:grid-cols-2 lg:items-start lg:gap-4 lg:space-y-0">
+        <WorkshopProfileCard />
+        <TeamCard isDeveloper={accountInfo?.isDeveloper ?? false} />
+      </div>
     </div>
   );
 }
