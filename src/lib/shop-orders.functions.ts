@@ -10,8 +10,12 @@ import {
   listChatMessages,
   listChatThreads,
   listCustomerOrders,
+  listOrderRefs,
+  listWorkshopMembers,
   listWorkshopOrders,
+  markThreadRead,
   sendChatMessage,
+  updateOrderInternalNote,
   updateShopOrderStatus,
 } from "./shop-orders.server";
 import { ORDER_STATUSES } from "./shop/orders";
@@ -94,6 +98,29 @@ export const updateShopOrderStatusFn = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const updateOrderInternalNoteFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z.object({ orderId: z.string().uuid(), note: z.string().max(4000) }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await updateOrderInternalNote(context.userId, data.orderId, data.note);
+    return { ok: true };
+  });
+
+export const listWorkshopMembersFn = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    return listWorkshopMembers(context.userId);
+  });
+
+export const searchOrderRefsFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ query: z.string().max(80).default("") }).parse(d))
+  .handler(async ({ data, context }) => {
+    return listOrderRefs(context.userId, data.query);
+  });
+
 export const getWorkshopStatsFn = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -115,6 +142,14 @@ export const listChatMessagesFn = createServerFn({ method: "POST" })
     return listChatMessages(context.userId, data.orderId);
   });
 
+export const markThreadReadFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ orderId: z.string().uuid().nullable() }).parse(d))
+  .handler(async ({ data, context }) => {
+    await markThreadRead(context.userId, data.orderId);
+    return { ok: true };
+  });
+
 export const sendChatMessageFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) =>
@@ -122,9 +157,11 @@ export const sendChatMessageFn = createServerFn({ method: "POST" })
       .object({
         orderId: z.string().uuid().nullable(),
         body: z.string().trim().min(1).max(4000),
+        mentions: z.array(z.string().uuid()).max(20).default([]),
+        orderRefs: z.array(z.string().uuid()).max(20).default([]),
       })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
-    return sendChatMessage(context.userId, data.orderId, data.body);
+    return sendChatMessage(context.userId, data.orderId, data.body, data.mentions, data.orderRefs);
   });
