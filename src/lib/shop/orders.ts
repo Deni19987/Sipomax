@@ -35,10 +35,49 @@ export const ORDER_STATUS_DOT: Record<ShopOrderStatus, string> = {
   levererad: "bg-emerald-500",
 };
 
-// Nästa steg i flödet, eller null när ordern är klar.
+// Nästa steg i flödet, eller null när ordern är klar. Status flyttas bara
+// framåt ett steg i taget — det finns medvetet ingen väljare för fritt val.
 export function nextOrderStatus(status: ShopOrderStatus): ShopOrderStatus | null {
   const index = ORDER_STATUSES.indexOf(status);
   return index >= 0 && index < ORDER_STATUSES.length - 1 ? ORDER_STATUSES[index + 1] : null;
+}
+
+// Föregående steg, används av ångra-åtgärden i ordermenyn.
+export function previousOrderStatus(status: ShopOrderStatus): ShopOrderStatus | null {
+  const index = ORDER_STATUSES.indexOf(status);
+  return index > 0 ? ORDER_STATUSES[index - 1] : null;
+}
+
+// ── Orderhistorik ───────────────────────────────────────────────────────────
+
+export type OrderEventType = "created" | "status_changed" | "note_updated" | "comment";
+
+export interface OrderEvent {
+  id: string;
+  type: OrderEventType;
+  actorName: string | null;
+  fromStatus: ShopOrderStatus | null;
+  toStatus: ShopOrderStatus | null;
+  detail: string | null;
+  createdAt: string;
+}
+
+// Läsbar rad i historiken.
+export function describeOrderEvent(event: OrderEvent): string {
+  const who = event.actorName || "Någon";
+  switch (event.type) {
+    case "created":
+      return `${who} lade beställningen`;
+    case "status_changed": {
+      const to = event.toStatus ? ORDER_STATUS_LABELS[event.toStatus] : "okänd status";
+      const from = event.fromStatus ? ORDER_STATUS_LABELS[event.fromStatus] : null;
+      return from ? `${who} flyttade ordern från ${from} till ${to}` : `${who} satte status ${to}`;
+    }
+    case "note_updated":
+      return `${who} uppdaterade den interna anteckningen`;
+    case "comment":
+      return `${who} kommenterade ordern`;
+  }
 }
 
 export interface ShopOrderLine {

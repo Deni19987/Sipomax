@@ -10,6 +10,7 @@ import {
   listChatMessages,
   listChatThreads,
   listCustomerOrders,
+  listOrderEvents,
   listOrderRefs,
   listWorkshopMembers,
   listWorkshopOrders,
@@ -106,6 +107,13 @@ export const updateOrderInternalNoteFn = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await updateOrderInternalNote(context.userId, data.orderId, data.note);
     return { ok: true };
+  });
+
+export const listOrderEventsFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ orderId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    return listOrderEvents(context.userId, data.orderId);
   });
 
 export const listWorkshopMembersFn = createServerFn({ method: "GET" })

@@ -25,21 +25,11 @@ import { cn } from "@/lib/utils";
 type TagPick = { sigil: "@" | "#"; label: string; id: string };
 
 /**
- * Intern chatt för verkstaden. Samma komponent driver den allmänna kanalen
- * (orderId = null) och ordertrådarna (orderId satt).
- *
- * - "page" fyller hela vyn med en fast komponerare i botten (chatt-fliken).
- * - "panel" är en inbäddad variant som används i orderdetaljerna.
+ * All datalogik för en tråd: hämtning, läsmarkering och optimistiskt skick.
+ * Bryts ut ur komponenten så att meddelandelistan och komponeraren kan
+ * placeras var för sig — orderdetaljerna har dem i olika kort.
  */
-export function ChatThread({
-  orderId,
-  variant = "page",
-  emptyHint,
-}: {
-  orderId: string | null;
-  variant?: "page" | "panel";
-  emptyHint?: string;
-}) {
+export function useOrderChat(orderId: string | null) {
   const threadKey = chatThreadKey(orderId);
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -119,6 +109,82 @@ export function ChatThread({
     }
   }
 
+  return { messages, isLoading, submit, ownId: user?.id, bottomRef };
+}
+
+/** Meddelandelistan i en tråd. */
+export function ChatMessageList({
+  chat,
+  className,
+  emptyHint,
+}: {
+  chat: ReturnType<typeof useOrderChat>;
+  className?: string;
+  emptyHint?: string;
+}) {
+  const { messages, isLoading, ownId, bottomRef } = chat;
+  return (
+    <div className={cn("space-y-3", className)}>
+      {isLoading ? (
+        <p className="py-6 text-center text-sm text-muted-foreground">Laddar meddelanden…</p>
+      ) : messages && messages.length > 0 ? (
+        messages.map((message) => (
+          <MessageBubble key={message.id} message={message} ownId={ownId} />
+        ))
+      ) : (
+        <div className="rounded-xl bg-muted/50 p-6 text-center">
+          <MessageSquare className="mx-auto h-8 w-8 text-muted-foreground" />
+          <p className="mt-2 text-sm font-semibold text-card-foreground">Inga meddelanden ännu</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {emptyHint ?? "Skriv det första meddelandet i den här tråden."}
+          </p>
+        </div>
+      )}
+      <div ref={bottomRef} />
+    </div>
+  );
+}
+
+/** Komponeraren med @- och #-taggning. */
+export function ChatComposer({
+  chat,
+  orderId,
+  onSent,
+}: {
+  chat: ReturnType<typeof useOrderChat>;
+  orderId: string | null;
+  onSent?: () => void;
+}) {
+  return (
+    <Composer
+      orderId={orderId}
+      onSubmit={async (text, picks) => {
+        const ok = await chat.submit(text, picks);
+        if (ok) onSent?.();
+        return ok;
+      }}
+    />
+  );
+}
+
+/**
+ * Intern chatt för verkstaden i ett stycke: lista + komponerare. Samma
+ * komponent driver den allmänna kanalen (orderId = null) och ordertrådarna.
+ *
+ * - "page" fyller hela vyn med en fast komponerare i botten (chatt-fliken).
+ * - "panel" är en inbäddad variant.
+ */
+export function ChatThread({
+  orderId,
+  variant = "page",
+  emptyHint,
+}: {
+  orderId: string | null;
+  variant?: "page" | "panel";
+  emptyHint?: string;
+}) {
+  const chat = useOrderChat(orderId);
+
   return (
     <div
       className={cn(
@@ -128,38 +194,23 @@ export function ChatThread({
         variant === "page" ? "min-h-[calc(100vh-12rem)] lg:min-h-0 lg:flex-1" : "gap-3",
       )}
     >
-      <div
+      <ChatMessageList
+        chat={chat}
+        emptyHint={emptyHint}
         className={cn(
-          "flex-1 space-y-3",
+          "flex-1",
           variant === "page"
             ? "px-4 py-4 lg:min-h-0 lg:overflow-y-auto"
             : "max-h-96 overflow-y-auto pr-1 lg:max-h-[28rem]",
         )}
-      >
-        {isLoading ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">Laddar meddelanden…</p>
-        ) : messages && messages.length > 0 ? (
-          messages.map((message) => (
-            <MessageBubble key={message.id} message={message} ownId={user?.id} />
-          ))
-        ) : (
-          <div className="rounded-xl bg-muted/50 p-6 text-center">
-            <MessageSquare className="mx-auto h-8 w-8 text-muted-foreground" />
-            <p className="mt-2 text-sm font-semibold text-card-foreground">Inga meddelanden ännu</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {emptyHint ?? "Skriv det första meddelandet i den här tråden."}
-            </p>
-          </div>
-        )}
-        <div ref={bottomRef} />
-      </div>
+      />
 
       <div
         className={cn(
           variant === "page" && "sticky bottom-[3.6rem] px-4 pb-2 lg:static lg:pb-4 lg:pt-0",
         )}
       >
-        <Composer onSubmit={submit} orderId={orderId} />
+        <ChatComposer chat={chat} orderId={orderId} />
       </div>
     </div>
   );
@@ -407,9 +458,7 @@ function Composer({
             }
           }}
           onClick={(e) => syncToken(draft, e.currentTarget.selectionStart ?? draft.length)}
-          placeholder={
-            orderId ? "Kommentera ordern… @ för kollega" : "Skriv ett meddelande… # för order"
-          }
+          placeholder={orderId ? "Kommentera ordern…" : "Skriv ett meddelande…"}
           className="max-h-32 min-h-[2rem] w-full resize-none bg-transparent py-1 text-sm text-foreground outline-none placeholder:text-muted-foreground"
         />
         <button

@@ -16,7 +16,7 @@ import {
   type OrderRef,
   type WorkshopMember,
 } from "./shop/chat";
-import type { ShopOrder, ShopOrderStatus } from "./shop/orders";
+import type { OrderEvent, OrderEventType, ShopOrder, ShopOrderStatus } from "./shop/orders";
 
 // De nya butiks-tabellerna finns ännu inte i den plattformsgenererade
 // Database-typen (src/integrations/supabase/types.ts får inte redigeras),
@@ -130,6 +130,74 @@ export async function assertWorkshopAccount(userId: string): Promise<string> {
   return getWorkshopId(userId);
 }
 
+// ── Orderhistorik ───────────────────────────────────────────────────────────
+
+// Varje åtgärd på en order loggas här. Loggningen får aldrig fälla själva
+// åtgärden — en trasig historikrad är mindre allvarlig än en utebliven
+// statusändring.
+async function logOrderEvent(input: {
+  orderId: string;
+  workshopId: string;
+  actorId: string | null;
+  actorName: string | null;
+  type: OrderEventType;
+  fromStatus?: ShopOrderStatus | null;
+  toStatus?: ShopOrderStatus | null;
+  detail?: string | null;
+}): Promise<void> {
+  const { error } = await admin.from("shop_order_events").insert({
+    order_id: input.orderId,
+    workshop_id: input.workshopId,
+    actor_id: input.actorId,
+    actor_name: input.actorName,
+    type: input.type,
+    from_status: input.fromStatus ?? null,
+    to_status: input.toStatus ?? null,
+    detail: input.detail ?? null,
+  });
+  if (error) console.error("[orders] failed to log event", input.type, error.message);
+}
+
+// Namnet som visas i historiken för en inloggad medarbetare.
+async function actorNameFor(userId: string): Promise<string> {
+  const [{ data: prof }, email] = await Promise.all([
+    admin.from("profiles").select("display_name").eq("id", userId).maybeSingle(),
+    getUserAuthEmail(userId),
+  ]);
+  return prof?.display_name || email || "En medarbetare";
+}
+
+export async function listOrderEvents(userId: string, orderId: string): Promise<OrderEvent[]> {
+  const workshopId = await assertWorkshopAccount(userId);
+  const { data, error } = await admin
+    .from("shop_order_events")
+    .select("id, type, actor_name, from_status, to_status, detail, created_at")
+    .eq("order_id", orderId)
+    .eq("workshop_id", workshopId)
+    .order("created_at", { ascending: false })
+    .limit(200);
+  if (error) throw new Error(error.message);
+  return (
+    (data ?? []) as Array<{
+      id: string;
+      type: OrderEventType;
+      actor_name: string | null;
+      from_status: ShopOrderStatus | null;
+      to_status: ShopOrderStatus | null;
+      detail: string | null;
+      created_at: string;
+    }>
+  ).map((row) => ({
+    id: row.id,
+    type: row.type,
+    actorName: row.actor_name,
+    fromStatus: row.from_status,
+    toStatus: row.to_status,
+    detail: row.detail,
+    createdAt: row.created_at,
+  }));
+}
+
 // ── Kund: lägga och läsa ordrar ─────────────────────────────────────────────
 
 export async function createShopOrder(
@@ -213,6 +281,15 @@ export async function createShopOrder(
     await admin.from("shop_orders").delete().eq("id", order.id);
     throw new Error(lineError.message);
   }
+
+  await logOrderEvent({
+    orderId: order.id,
+    workshopId,
+    actorId: userId,
+    actorName: prof?.display_name || email || "Kunden",
+    type: "created",
+    toStatus: "mottagen",
+  });
 
   // Heads-up till hela verkstaden om att en ny beställning kommit in. En
   // misslyckad notis får aldrig fälla själva beställningen.
@@ -337,6 +414,15 @@ export async function updateOrderInternalNote(
     .select("id");
   if (error) throw new Error(error.message);
   if (!data?.length) throw new Error("Beställningen kunde inte hittas.");
+
+  await logOrderEvent({
+    orderId,
+    workshopId,
+    actorId: userId,
+    actorName: await actorNameFor(userId),
+    type: "note_updated",
+    detail: note.trim() ? note.trim().slice(0, 200) : "Anteckningen tömdes",
+  });
 }
 
 // Alla konton som hör till verkstaden — ägaren plus inbjudna medarbetare.
@@ -372,6 +458,14 @@ export async function updateShopOrderStatus(
   status: ShopOrderStatus,
 ): Promise<void> {
   const workshopId = await assertWorkshopAccount(userId);
+  const { data: current } = await admin
+    .from("shop_orders")
+    .select("status")
+    .eq("id", orderId)
+    .eq("workshop_id", workshopId)
+    .maybeSingle();
+  const fromStatus = (current?.status ?? null) as ShopOrderStatus | null;
+
   const { data, error } = await admin
     .from("shop_orders")
     .update({ status })
@@ -380,6 +474,18 @@ export async function updateShopOrderStatus(
     .select("id");
   if (error) throw new Error(error.message);
   if (!data?.length) throw new Error("Beställningen kunde inte hittas.");
+
+  if (fromStatus !== status) {
+    await logOrderEvent({
+      orderId,
+      workshopId,
+      actorId: userId,
+      actorName: await actorNameFor(userId),
+      type: "status_changed",
+      fromStatus,
+      toStatus: status,
+    });
+  }
 }
 
 export type WorkshopStats = {
@@ -765,6 +871,17 @@ export async function sendChatMessage(
     .select(MESSAGE_SELECT)
     .single();
   if (error) throw new Error(error.message);
+
+  if (orderId) {
+    await logOrderEvent({
+      orderId,
+      workshopId,
+      actorId: userId,
+      actorName: senderName,
+      type: "comment",
+      detail: plainChatBody(body).slice(0, 200),
+    });
+  }
 
   // Avsändaren notifieras aldrig om sig själv.
   const targets = validMentions.filter((id) => id !== userId);
