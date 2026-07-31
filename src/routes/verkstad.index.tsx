@@ -4,7 +4,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   ArrowRight,
+  ArrowUpDown,
   AtSign,
+  CalendarDays,
+  ChevronDown,
   ChevronRight,
   Mail,
   MessageSquare,
@@ -13,7 +16,9 @@ import {
   Package,
   Phone,
   Search,
+  SlidersHorizontal,
   UserRound,
+  X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -21,8 +26,12 @@ import { CATEGORY_ICONS } from "@/components/shop/category-icons";
 import { ChatComposer, ChatMessageList, useOrderChat } from "@/components/workshop/chat-thread";
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -36,6 +45,30 @@ import {
   updateShopOrderStatusFn,
 } from "@/lib/shop-orders.functions";
 import { formatPrice, getCategory, getProduct } from "@/lib/shop/catalog";
+import {
+  DEFAULT_FILTERS,
+  ORDER_AMOUNTS,
+  ORDER_AMOUNT_LABELS,
+  ORDER_PERIODS,
+  ORDER_PERIOD_LABELS,
+  ORDER_SORTS,
+  ORDER_SORT_LABELS,
+  ORDER_VIEWS,
+  ORDER_VIEW_HINTS,
+  ORDER_VIEW_LABELS,
+  activeFilterChips,
+  clearFilterKey,
+  clearRefinements,
+  countByView,
+  dayGroupLabel,
+  filterOrders,
+  groupsByDay,
+  type OrderAmount,
+  type OrderFilters,
+  type OrderPeriod,
+  type OrderSort,
+  type OrderView,
+} from "@/lib/shop/order-filters";
 import {
   ORDER_STATUSES,
   ORDER_STATUS_BADGE,
@@ -51,18 +84,79 @@ import {
 } from "@/lib/shop/orders";
 import { cn } from "@/lib/utils";
 
-// ?order=<uuid> öppnar orderdetaljerna, utan sökparameter visas översikten.
+// ?order=<uuid> öppnar orderdetaljerna, utan den visas översikten. Övriga
+// parametrar är listans filter — de ligger i URL:en så att en vy går att dela,
+// bokmärka och backa tillbaka till.
+const searchSchema = z.object({
+  order: z.string().optional(),
+  vy: z.enum(ORDER_VIEWS as [OrderView, ...OrderView[]]).optional(),
+  q: z.string().optional(),
+  period: z.enum(ORDER_PERIODS as [OrderPeriod, ...OrderPeriod[]]).optional(),
+  belopp: z.enum(ORDER_AMOUNTS as [OrderAmount, ...OrderAmount[]]).optional(),
+  olasta: z.boolean().optional(),
+  taggad: z.boolean().optional(),
+  kommenterad: z.boolean().optional(),
+  anteckning: z.boolean().optional(),
+  sortering: z.enum(ORDER_SORTS as [OrderSort, ...OrderSort[]]).optional(),
+});
+
+type OrderSearch = z.infer<typeof searchSchema>;
+
 export const Route = createFileRoute("/verkstad/")({
   ssr: false,
-  validateSearch: z.object({ order: z.string().optional(), q: z.string().optional() }),
+  validateSearch: searchSchema,
   component: WorkshopOrdersPage,
 });
 
-type StatusFilter = ShopOrderStatus | "alla";
+function searchToFilters(search: OrderSearch): OrderFilters {
+  return {
+    view: search.vy ?? DEFAULT_FILTERS.view,
+    query: search.q ?? DEFAULT_FILTERS.query,
+    period: search.period ?? DEFAULT_FILTERS.period,
+    amount: search.belopp ?? DEFAULT_FILTERS.amount,
+    unread: search.olasta ?? DEFAULT_FILTERS.unread,
+    mentioned: search.taggad ?? DEFAULT_FILTERS.mentioned,
+    commented: search.kommenterad ?? DEFAULT_FILTERS.commented,
+    noted: search.anteckning ?? DEFAULT_FILTERS.noted,
+    sort: search.sortering ?? DEFAULT_FILTERS.sort,
+  };
+}
+
+// Bara det som avviker från standard hamnar i URL:en — annars växer adressen
+// med brus som gör delade länkar svårlästa.
+function filtersToSearch(filters: OrderFilters): OrderSearch {
+  return {
+    vy: filters.view === DEFAULT_FILTERS.view ? undefined : filters.view,
+    q: filters.query.trim() || undefined,
+    period: filters.period === DEFAULT_FILTERS.period ? undefined : filters.period,
+    belopp: filters.amount === DEFAULT_FILTERS.amount ? undefined : filters.amount,
+    olasta: filters.unread || undefined,
+    taggad: filters.mentioned || undefined,
+    kommenterad: filters.commented || undefined,
+    anteckning: filters.noted || undefined,
+    sortering: filters.sort === DEFAULT_FILTERS.sort ? undefined : filters.sort,
+  };
+}
 
 function WorkshopOrdersPage() {
-  const { order, q } = Route.useSearch();
-  return order ? <OrderDetail orderId={order} /> : <OrderBoard initialSearch={q ?? ""} />;
+  const search = Route.useSearch();
+  const navigate = useNavigate();
+  const filters = searchToFilters(search);
+
+  // Filterändringar ersätter historikposten så att bakåtknappen tar dig ut ur
+  // listan i stället för att stega igenom varje justering.
+  function setFilters(next: Partial<OrderFilters>) {
+    navigate({
+      to: "/verkstad",
+      search: filtersToSearch({ ...filters, ...next }),
+      replace: true,
+    });
+  }
+
+  if (search.order) {
+    return <OrderDetail orderId={search.order} backSearch={filtersToSearch(filters)} />;
+  }
+  return <OrderBoard filters={filters} setFilters={setFilters} />;
 }
 
 function formatDateTime(iso: string) {
@@ -90,7 +184,13 @@ function itemCount(order: ShopOrder) {
 
 // ── Översikt ────────────────────────────────────────────────────────────────
 
-function OrderBoard({ initialSearch }: { initialSearch: string }) {
+function OrderBoard({
+  filters,
+  setFilters,
+}: {
+  filters: OrderFilters;
+  setFilters: (next: Partial<OrderFilters>) => void;
+}) {
   const fetchOrders = useServerFn(listWorkshopOrdersFn);
   const { data: orders, isLoading } = useQuery({
     queryKey: ["workshop-orders"],
@@ -98,44 +198,24 @@ function OrderBoard({ initialSearch }: { initialSearch: string }) {
     refetchInterval: 30_000,
   });
 
-  const [filter, setFilter] = useState<StatusFilter>("alla");
-  const [search, setSearch] = useState(initialSearch);
+  // Sökrutan skrivs lokalt och speglas till URL:en — annars skulle varje
+  // tangenttryck bli en egen post i webbläsarhistoriken.
+  const [queryDraft, setQueryDraft] = useState(filters.query);
+  useEffect(() => setQueryDraft(filters.query), [filters.query]);
+  useEffect(() => {
+    if (queryDraft === filters.query) return;
+    const timer = setTimeout(() => setFilters({ query: queryDraft }), 250);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queryDraft]);
 
-  const counts = useMemo(() => {
-    const base: Record<StatusFilter, number> = {
-      alla: 0,
-      mottagen: 0,
-      behandlas: 0,
-      skickad: 0,
-      levererad: 0,
-    };
-    for (const order of orders ?? []) {
-      base.alla += 1;
-      base[order.status] += 1;
-    }
-    return base;
-  }, [orders]);
+  const all = useMemo(() => orders ?? [], [orders]);
+  const counts = useMemo(() => countByView(all, filters), [all, filters]);
+  const visible = useMemo(() => filterOrders(all, filters), [all, filters]);
+  const chips = activeFilterChips(filters);
 
-  const visible = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    return (orders ?? []).filter((order) => {
-      if (filter !== "alla" && order.status !== filter) return false;
-      if (!term) return true;
-      return [
-        String(order.orderNumber),
-        order.customerName ?? "",
-        order.customerEmail ?? "",
-        order.customerPhone ?? "",
-        ...order.lines.map((l) => l.name),
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(term);
-    });
-  }, [orders, filter, search]);
-
-  const newCount = counts.mottagen;
-  const unreadTotal = (orders ?? []).reduce((sum, o) => sum + (o.unreadCount ?? 0), 0);
+  const unreadTotal = all.reduce((sum, o) => sum + (o.unreadCount ?? 0), 0);
+  const mentionTotal = all.filter((o) => o.mentionsMe).length;
 
   return (
     <div className="space-y-3 px-4 pt-4 lg:space-y-4 lg:pt-8">
@@ -143,9 +223,7 @@ function OrderBoard({ initialSearch }: { initialSearch: string }) {
         <div>
           <h1 className="text-lg font-bold text-foreground lg:text-2xl">Beställningar</h1>
           <p className="text-xs text-muted-foreground lg:text-sm">
-            {newCount > 0
-              ? `${newCount} ${newCount === 1 ? "ny beställning väntar" : "nya beställningar väntar"}`
-              : "Inga nya beställningar just nu"}
+            {counts["att-gora"] > 0 ? `${counts["att-gora"]} att göra` : "Inget att göra just nu"}
             {unreadTotal > 0 ? ` · ${unreadTotal} olästa kommentarer` : ""}
           </p>
         </div>
@@ -153,35 +231,146 @@ function OrderBoard({ initialSearch }: { initialSearch: string }) {
         <label className="flex items-center gap-2 rounded-xl bg-card px-3 py-2 shadow-sm lg:w-96">
           <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
           <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Sök ordernummer, kund eller produkt…"
+            value={queryDraft}
+            onChange={(e) => setQueryDraft(e.target.value)}
+            placeholder="Sök order, kund eller produkt…"
             className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
           />
+          {queryDraft && (
+            <button
+              type="button"
+              aria-label="Rensa sökningen"
+              onClick={() => setQueryDraft("")}
+              className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </label>
       </div>
 
+      {/* Vyflikar — den vanligaste frågan (var i flödet?) alltid ett klick bort */}
       <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 lg:mx-0 lg:flex-wrap lg:px-0">
-        <FilterChip
-          label="Alla"
-          count={counts.alla}
-          active={filter === "alla"}
-          onClick={() => setFilter("alla")}
-        />
-        {ORDER_STATUSES.map((status) => (
-          <FilterChip
-            key={status}
-            label={ORDER_STATUS_LABELS[status]}
-            count={counts[status]}
-            dot={ORDER_STATUS_DOT[status]}
-            active={filter === status}
-            onClick={() => setFilter(status)}
+        {ORDER_VIEWS.map((view) => (
+          <ViewTab
+            key={view}
+            label={ORDER_VIEW_LABELS[view]}
+            count={counts[view]}
+            dot={view in ORDER_STATUS_DOT ? ORDER_STATUS_DOT[view as ShopOrderStatus] : undefined}
+            active={filters.view === view}
+            onClick={() => setFilters({ view })}
           />
         ))}
       </div>
 
-      {filter !== "alla" && (
-        <p className="text-xs text-muted-foreground">{ORDER_STATUS_HINTS[filter]}</p>
+      {/* Förfiningar: de två mest använda som egna knappar, resten i en meny */}
+      <div className="flex flex-wrap items-center gap-2">
+        <ToggleFilter
+          icon={MessageSquare}
+          label="Olästa"
+          count={unreadTotal > 0 ? all.filter((o) => (o.unreadCount ?? 0) > 0).length : 0}
+          active={filters.unread}
+          onClick={() => setFilters({ unread: !filters.unread })}
+        />
+        <ToggleFilter
+          icon={AtSign}
+          label="Jag är taggad"
+          count={mentionTotal}
+          active={filters.mentioned}
+          onClick={() => setFilters({ mentioned: !filters.mentioned })}
+        />
+
+        <MenuButton
+          icon={CalendarDays}
+          label={filters.period === "alla" ? "Period" : ORDER_PERIOD_LABELS[filters.period]}
+          active={filters.period !== "alla"}
+        >
+          <DropdownMenuRadioGroup
+            value={filters.period}
+            onValueChange={(value) => setFilters({ period: value as OrderPeriod })}
+          >
+            {ORDER_PERIODS.map((period) => (
+              <DropdownMenuRadioItem key={period} value={period}>
+                {ORDER_PERIOD_LABELS[period]}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </MenuButton>
+
+        <MenuButton
+          icon={SlidersHorizontal}
+          label="Filter"
+          active={filters.amount !== "alla" || filters.commented || filters.noted}
+        >
+          <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-muted-foreground">
+            Ordervärde
+          </DropdownMenuLabel>
+          <DropdownMenuRadioGroup
+            value={filters.amount}
+            onValueChange={(value) => setFilters({ amount: value as OrderAmount })}
+          >
+            {ORDER_AMOUNTS.map((amount) => (
+              <DropdownMenuRadioItem key={amount} value={amount}>
+                {ORDER_AMOUNT_LABELS[amount]}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-muted-foreground">
+            Innehåll
+          </DropdownMenuLabel>
+          <DropdownMenuCheckboxItem
+            checked={filters.commented}
+            onCheckedChange={(checked) => setFilters({ commented: !!checked })}
+          >
+            Har kommentarer
+          </DropdownMenuCheckboxItem>
+          <DropdownMenuCheckboxItem
+            checked={filters.noted}
+            onCheckedChange={(checked) => setFilters({ noted: !!checked })}
+          >
+            Har intern anteckning
+          </DropdownMenuCheckboxItem>
+        </MenuButton>
+
+        <div className="ml-auto">
+          <MenuButton icon={ArrowUpDown} label={ORDER_SORT_LABELS[filters.sort]} align="end">
+            <DropdownMenuRadioGroup
+              value={filters.sort}
+              onValueChange={(value) => setFilters({ sort: value as OrderSort })}
+            >
+              {ORDER_SORTS.map((sort) => (
+                <DropdownMenuRadioItem key={sort} value={sort}>
+                  {ORDER_SORT_LABELS[sort]}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </MenuButton>
+        </div>
+      </div>
+
+      {/* Allt aktivt syns som chips — inget filter kan gömma sig i en meny */}
+      {chips.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          {chips.map((chip) => (
+            <button
+              key={chip.key}
+              type="button"
+              onClick={() => setFilters(clearFilterKey(filters, chip.key))}
+              className="flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/20"
+            >
+              {chip.label}
+              <X className="h-3 w-3" />
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => setFilters(clearRefinements(filters))}
+            className="rounded-full px-2 py-1 text-xs font-semibold text-muted-foreground underline-offset-2 hover:underline"
+          >
+            Rensa alla
+          </button>
+        </div>
       )}
 
       {isLoading ? (
@@ -191,28 +380,40 @@ function OrderBoard({ initialSearch }: { initialSearch: string }) {
       ) : visible.length > 0 ? (
         <div className="overflow-hidden rounded-xl bg-card shadow-sm">
           <OrderListHeader />
-          {visible.map((order, index) => (
-            <OrderRow key={order.id} order={order} withBorder={index > 0} />
-          ))}
+          <OrderRows orders={visible} sort={filters.sort} />
+          <div className="border-t border-border px-4 py-2 text-[11px] text-muted-foreground">
+            Visar {visible.length} av {all.length} beställningar
+            {filters.view !== "alla" ? ` · ${ORDER_VIEW_HINTS[filters.view]}` : ""}
+          </div>
         </div>
       ) : (
         <div className="rounded-xl bg-card p-8 text-center shadow-sm">
           <Package className="mx-auto h-10 w-10 text-muted-foreground" />
           <p className="mt-3 text-sm font-semibold text-card-foreground">
-            {orders && orders.length > 0 ? "Inga träffar" : "Inga beställningar ännu"}
+            {all.length > 0 ? "Inga träffar" : "Inga beställningar ännu"}
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            {orders && orders.length > 0
-              ? "Prova en annan sökning eller ett annat statusfilter."
+            {all.length > 0
+              ? "Ingen beställning matchar filtren just nu."
               : "När kunder skickar beställningar i butiken dyker de upp här."}
           </p>
+          {all.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setFilters({ ...clearRefinements(filters), view: "alla" })}
+              className="mt-4 rounded-full bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground"
+            >
+              Rensa alla filter
+            </button>
+          )}
         </div>
       )}
     </div>
   );
 }
 
-function FilterChip({
+/** Vyflik med antal, t.ex. "Att göra 5". */
+function ViewTab({
   label,
   count,
   dot,
@@ -248,6 +449,109 @@ function FilterChip({
   );
 }
 
+/** På/av-knapp för de mest använda förfiningarna. */
+function ToggleFilter({
+  icon: Icon,
+  label,
+  count,
+  active,
+  onClick,
+}: {
+  icon: typeof MessageSquare;
+  label: string;
+  count: number;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={count === 0 && !active}
+      className={cn(
+        "flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
+        active
+          ? "bg-primary text-primary-foreground"
+          : "bg-card text-muted-foreground shadow-sm hover:text-foreground disabled:opacity-50 disabled:hover:text-muted-foreground",
+      )}
+    >
+      <Icon className="h-3.5 w-3.5" />
+      {label}
+      {count > 0 && (
+        <span
+          className={cn(
+            "rounded-full px-1.5 text-[11px] font-semibold",
+            active ? "bg-primary-foreground/20" : "bg-primary/10 text-primary",
+          )}
+        >
+          {count}
+        </span>
+      )}
+    </button>
+  );
+}
+
+/** Knapp som fäller ut en meny med filteralternativ. */
+function MenuButton({
+  icon: Icon,
+  label,
+  active,
+  align = "start",
+  children,
+}: {
+  icon: typeof MessageSquare;
+  label: string;
+  active?: boolean;
+  align?: "start" | "end";
+  children: React.ReactNode;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        className={cn(
+          "flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
+          active
+            ? "bg-primary text-primary-foreground"
+            : "bg-card text-muted-foreground shadow-sm hover:text-foreground",
+        )}
+      >
+        <Icon className="h-3.5 w-3.5" />
+        {label}
+        <ChevronDown className="h-3 w-3" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align={align} className="w-56">
+        {children}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/** Raderna, med dagsrubriker när listan är sorterad på datum. */
+function OrderRows({ orders, sort }: { orders: ShopOrder[]; sort: OrderSort }) {
+  const grouped = groupsByDay(sort);
+  let lastGroup: string | null = null;
+
+  return (
+    <>
+      {orders.map((order, index) => {
+        const group = grouped ? dayGroupLabel(order.createdAt) : null;
+        const showGroup = group !== null && group !== lastGroup;
+        if (group) lastGroup = group;
+        return (
+          <div key={order.id}>
+            {showGroup && (
+              <p className="border-t border-border bg-muted/40 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                {group}
+              </p>
+            )}
+            <OrderRow order={order} withBorder={index > 0 && !showGroup} />
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 // Kolumnmallen delas av rubrikraden och orderraderna på desktop.
 const ROW_GRID =
   "lg:grid lg:grid-cols-[2.5rem_9rem_minmax(0,1fr)_6rem_7rem_9rem_5rem_1.25rem] lg:items-center lg:gap-4";
@@ -277,7 +581,7 @@ function OrderRow({ order, withBorder }: { order: ShopOrder; withBorder: boolean
   return (
     <Link
       to="/verkstad"
-      search={{ order: order.id }}
+      search={(prev) => ({ ...prev, order: order.id })}
       className={cn(
         "flex items-center gap-3 p-4 transition-colors hover:bg-accent",
         ROW_GRID,
@@ -354,9 +658,17 @@ function OrderRow({ order, withBorder }: { order: ShopOrder; withBorder: boolean
     </Link>
   );
 }
+
 // ── Orderdetaljer ───────────────────────────────────────────────────────────
 
-function OrderDetail({ orderId }: { orderId: string }) {
+function OrderDetail({
+  orderId,
+  backSearch,
+}: {
+  orderId: string;
+  /** Listans filter, så att tillbakaknappen återvänder till samma vy. */
+  backSearch: Record<string, unknown>;
+}) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const fetchOrder = useServerFn(getWorkshopOrderFn);
@@ -409,7 +721,7 @@ function OrderDetail({ orderId }: { orderId: string }) {
           </p>
           <button
             type="button"
-            onClick={() => navigate({ to: "/verkstad", search: {} })}
+            onClick={() => navigate({ to: "/verkstad", search: backSearch })}
             className="mt-4 rounded-full bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground"
           >
             Till alla beställningar
@@ -431,7 +743,7 @@ function OrderDetail({ orderId }: { orderId: string }) {
           <button
             type="button"
             aria-label="Till alla beställningar"
-            onClick={() => navigate({ to: "/verkstad", search: {} })}
+            onClick={() => navigate({ to: "/verkstad", search: backSearch })}
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-card shadow-sm transition-colors hover:bg-accent"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -602,7 +914,7 @@ function CustomerCard({ order }: { order: ShopOrder }) {
       {customerLabel && (
         <Link
           to="/verkstad"
-          search={{ q: customerLabel }}
+          search={{ q: customerLabel, vy: "alla" }}
           className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-card-foreground transition-colors hover:bg-accent"
         >
           Visa kundens ordrar

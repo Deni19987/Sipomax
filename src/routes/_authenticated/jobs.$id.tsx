@@ -221,7 +221,10 @@ function JobDetailPage() {
   const [pickupLoading, setPickupLoading] = useState(false);
   const qc = useQueryClient();
 
-  const searchParams = new URLSearchParams(location.search);
+  // location.search är routerns parsade sökobjekt (unionen av alla routers
+  // parametrar). Koden här läser bara ut strängvärden, så vi säger det rakt ut
+  // i stället för att låsa andra routers parametrar till string.
+  const searchParams = new URLSearchParams(location.search as Record<string, string>);
   const redirectBack = searchParams.get("redirect") || "/dashboard";
   const backLabel = redirectBack === "/opportunities" ? "Tillbaka till uppföljningar" : "Tillbaka till jobb";
   const { data, isLoading } = useQuery({
