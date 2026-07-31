@@ -9,7 +9,11 @@ import {
   CalendarDays,
   ChevronDown,
   ChevronRight,
+  Copy,
+  CreditCard,
+  ExternalLink,
   Mail,
+  MapPin,
   MessageSquare,
   MoreHorizontal,
   NotebookPen,
@@ -17,6 +21,7 @@ import {
   Phone,
   Search,
   SlidersHorizontal,
+  Truck,
   UserRound,
   X,
 } from "lucide-react";
@@ -42,6 +47,8 @@ import {
   listOrderEventsFn,
   listWorkshopOrdersFn,
   updateOrderInternalNoteFn,
+  updateOrderPaymentStatusFn,
+  updateOrderShippingFn,
   updateShopOrderStatusFn,
 } from "@/lib/shop-orders.functions";
 import { formatPrice, getCategory, getProduct } from "@/lib/shop/catalog";
@@ -70,15 +77,23 @@ import {
   type OrderView,
 } from "@/lib/shop/order-filters";
 import {
+  CARRIERS,
   ORDER_STATUSES,
   ORDER_STATUS_BADGE,
   ORDER_STATUS_DOT,
   ORDER_STATUS_HINTS,
   ORDER_STATUS_LABELS,
+  PAYMENT_STATUSES,
+  PAYMENT_STATUS_BADGE,
+  PAYMENT_STATUS_LABELS,
   describeOrderEvent,
+  formatAddressLines,
+  getCarrier,
   nextOrderStatus,
   previousOrderStatus,
+  trackingLink,
   type OrderEvent,
+  type PaymentStatus,
   type ShopOrder,
   type ShopOrderStatus,
 } from "@/lib/shop/orders";
@@ -658,8 +673,12 @@ function OrderRow({ order, withBorder }: { order: ShopOrder; withBorder: boolean
     </Link>
   );
 }
-
 // ── Orderdetaljer ───────────────────────────────────────────────────────────
+//
+// Layouten följer samma logik som andra ordersystem: huvudspalten bär ordern
+// och åtgärderna (var i flödet, vad som beställts, betalning), sidospalten bär
+// referensuppgifterna man tittar på medan man jobbar (kund, vart det ska,
+// interna anteckningar). På mobil staplas allt i samma ordning.
 
 function OrderDetail({
   orderId,
@@ -690,10 +709,7 @@ function OrderDetail({
     mutationFn: (status: ShopOrderStatus) => updateStatus({ data: { orderId, status } }),
     onSuccess: (_, status) => {
       toast.success(`Status ändrad till ${ORDER_STATUS_LABELS[status]}`);
-      queryClient.invalidateQueries({ queryKey: ["workshop-order", orderId] });
-      queryClient.invalidateQueries({ queryKey: ["workshop-orders"] });
-      queryClient.invalidateQueries({ queryKey: ["workshop-stats"] });
-      queryClient.invalidateQueries({ queryKey: ["order-events", orderId] });
+      invalidateOrder(queryClient, orderId);
     },
     onError: (err) =>
       toast.error(err instanceof Error ? err.message : "Statusen kunde inte uppdateras."),
@@ -736,8 +752,7 @@ function OrderDetail({
 
   return (
     <div className="space-y-3 px-4 pt-4 lg:space-y-4 lg:pt-8">
-      {/* Rubrikrad: tillbaka, ordernummer, status och enda statusåtgärden.
-          På mobil hamnar åtgärderna på egen rad under rubriken. */}
+      {/* Rubrikrad: identitet, båda statusarna och enda statusåtgärden */}
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <button
@@ -766,6 +781,14 @@ function OrderDetail({
             )}
           >
             {ORDER_STATUS_LABELS[order.status]}
+          </span>
+          <span
+            className={cn(
+              "shrink-0 rounded-md px-2.5 py-1 text-xs font-medium",
+              PAYMENT_STATUS_BADGE[order.paymentStatus],
+            )}
+          >
+            {PAYMENT_STATUS_LABELS[order.paymentStatus]}
           </span>
 
           {next ? (
@@ -798,12 +821,7 @@ function OrderDetail({
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => {
-                  void navigator.clipboard
-                    ?.writeText(String(order.orderNumber))
-                    .then(() => toast.success("Ordernumret kopierat."))
-                    .catch(() => toast.error("Kunde inte kopiera."));
-                }}
+                onClick={() => copyToClipboard(String(order.orderNumber), "Ordernumret kopierat.")}
               >
                 Kopiera ordernummer
               </DropdownMenuItem>
@@ -823,20 +841,15 @@ function OrderDetail({
         </div>
       </div>
 
-      {/* Vänster: kund + anteckning. Höger: flöde + flikar. */}
-      <div className="space-y-3 lg:grid lg:grid-cols-[18rem_minmax(0,1fr)] lg:items-start lg:gap-4 lg:space-y-0">
-        <div className="space-y-3 lg:space-y-4">
-          <CustomerCard order={order} />
-          <InternalNote orderId={order.id} note={order.internalNote ?? ""} />
-        </div>
-
+      <div className="space-y-3 lg:grid lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start lg:gap-4 lg:space-y-0">
+        {/* Huvudspalt: ordern och åtgärderna */}
         <div className="space-y-3 lg:space-y-4">
           <StatusFlowCard status={order.status} />
 
           <Tabs value={tab} onValueChange={setTab}>
             <div className="rounded-xl bg-card shadow-sm">
               <TabsList className="h-auto w-full justify-start gap-1 rounded-none border-b border-border bg-transparent p-0 px-4">
-                <OrderTab value="artiklar">Artiklar</OrderTab>
+                <OrderTab value="artiklar">Artiklar ({order.lines.length})</OrderTab>
                 <OrderTab value="kommentarer">
                   Kommentarer
                   {chat.messages && chat.messages.length > 0 ? ` (${chat.messages.length})` : ""}
@@ -859,6 +872,15 @@ function OrderDetail({
               </TabsContent>
             </div>
           </Tabs>
+
+          <PaymentCard order={order} />
+        </div>
+
+        {/* Sidospalt: vem, vart och interna noteringar */}
+        <div className="space-y-3 lg:space-y-4">
+          <CustomerCard order={order} />
+          <ShippingCard order={order} />
+          <InternalNote orderId={order.id} note={order.internalNote ?? ""} />
         </div>
       </div>
 
@@ -868,6 +890,20 @@ function OrderDetail({
       </div>
     </div>
   );
+}
+
+function invalidateOrder(queryClient: ReturnType<typeof useQueryClient>, orderId: string) {
+  queryClient.invalidateQueries({ queryKey: ["workshop-order", orderId] });
+  queryClient.invalidateQueries({ queryKey: ["workshop-orders"] });
+  queryClient.invalidateQueries({ queryKey: ["workshop-stats"] });
+  queryClient.invalidateQueries({ queryKey: ["order-events", orderId] });
+}
+
+function copyToClipboard(text: string, message: string) {
+  void navigator.clipboard
+    ?.writeText(text)
+    .then(() => toast.success(message))
+    .catch(() => toast.error("Kunde inte kopiera."));
 }
 
 function OrderTab({ value, children }: { value: string; children: React.ReactNode }) {
@@ -881,16 +917,36 @@ function OrderTab({ value, children }: { value: string; children: React.ReactNod
   );
 }
 
+/** Rubrik som används av alla kort i ordervyn. */
+function CardTitle({
+  icon: Icon,
+  children,
+  action,
+}: {
+  icon: typeof Package;
+  children: React.ReactNode;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <Icon className="h-4 w-4 shrink-0 text-primary" />
+      <p className="flex-1 text-sm font-semibold text-card-foreground">{children}</p>
+      {action}
+    </div>
+  );
+}
+
+// ── Kund ────────────────────────────────────────────────────────────────────
+
 function CustomerCard({ order }: { order: ShopOrder }) {
   const customerLabel = order.customerName || order.customerEmail || "";
   return (
     <div className="rounded-xl bg-card p-4 shadow-sm">
-      <p className="text-xs font-semibold text-muted-foreground">Kund</p>
-      <p className="mt-3 flex items-center gap-2 text-sm font-semibold text-card-foreground">
-        <UserRound className="h-4 w-4 shrink-0 text-primary" />
+      <CardTitle icon={UserRound}>Kund</CardTitle>
+      <p className="mt-3 text-sm font-semibold text-card-foreground">
         {order.customerName || "Okänd kund"}
       </p>
-      <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+      <div className="mt-1.5 space-y-1 text-xs text-muted-foreground">
         {order.customerEmail && (
           <a
             href={`mailto:${order.customerEmail}`}
@@ -915,7 +971,7 @@ function CustomerCard({ order }: { order: ShopOrder }) {
         <Link
           to="/verkstad"
           search={{ q: customerLabel, vy: "alla" }}
-          className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-card-foreground transition-colors hover:bg-accent"
+          className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-card-foreground transition-colors hover:bg-accent"
         >
           Visa kundens ordrar
           <ArrowRight className="h-3.5 w-3.5" />
@@ -924,6 +980,322 @@ function CustomerCard({ order }: { order: ShopOrder }) {
     </div>
   );
 }
+
+// ── Betalning ───────────────────────────────────────────────────────────────
+
+function PaymentCard({ order }: { order: ShopOrder }) {
+  const queryClient = useQueryClient();
+  const updatePayment = useServerFn(updateOrderPaymentStatusFn);
+
+  const mutation = useMutation({
+    mutationFn: (paymentStatus: PaymentStatus) =>
+      updatePayment({ data: { orderId: order.id, paymentStatus } }),
+    onSuccess: (_, paymentStatus) => {
+      toast.success(`Betalstatus: ${PAYMENT_STATUS_LABELS[paymentStatus]}`);
+      invalidateOrder(queryClient, order.id);
+    },
+    onError: (err) =>
+      toast.error(err instanceof Error ? err.message : "Betalstatus kunde inte ändras."),
+  });
+
+  const itemTotal = order.lines.reduce((sum, l) => sum + l.unitPrice * l.quantity, 0);
+
+  return (
+    <div className="rounded-xl bg-card p-4 shadow-sm">
+      <CardTitle icon={CreditCard}>Betalning</CardTitle>
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        {PAYMENT_STATUSES.map((status) => (
+          <button
+            key={status}
+            type="button"
+            disabled={mutation.isPending}
+            onClick={() => mutation.mutate(status)}
+            className={cn(
+              "rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50",
+              order.paymentStatus === status
+                ? PAYMENT_STATUS_BADGE[status]
+                : "bg-muted text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {PAYMENT_STATUS_LABELS[status]}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-4 space-y-1.5 border-t border-border pt-3 text-sm">
+        <div className="flex items-center justify-between text-muted-foreground">
+          <span>Delsumma ({order.lines.reduce((sum, l) => sum + l.quantity, 0)} artiklar)</span>
+          <span>{formatPrice(itemTotal)}</span>
+        </div>
+        <div className="flex items-center justify-between font-bold text-card-foreground">
+          <span>Totalt</span>
+          <span>{formatPrice(order.total)}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Leverans: adress, fraktbolag och kollinummer ────────────────────────────
+
+function ShippingCard({ order }: { order: ShopOrder }) {
+  const queryClient = useQueryClient();
+  const saveShipping = useServerFn(updateOrderShippingFn);
+
+  const initial = useMemo(
+    () => ({
+      recipient: order.shipping.recipient ?? "",
+      street: order.shipping.street ?? "",
+      postalCode: order.shipping.postalCode ?? "",
+      city: order.shipping.city ?? "",
+      country: order.shipping.country ?? "",
+      carrier: order.carrier ?? "",
+      trackingNumber: order.trackingNumber ?? "",
+    }),
+    [order],
+  );
+
+  const [form, setForm] = useState(initial);
+  const [editing, setEditing] = useState(false);
+  useEffect(() => setForm(initial), [initial]);
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      saveShipping({
+        data: {
+          orderId: order.id,
+          recipient: form.recipient || null,
+          street: form.street || null,
+          postalCode: form.postalCode || null,
+          city: form.city || null,
+          country: form.country || null,
+          carrier: form.carrier || null,
+          trackingNumber: form.trackingNumber || null,
+        },
+      }),
+    onSuccess: () => {
+      toast.success("Leveransuppgifterna sparade.");
+      setEditing(false);
+      invalidateOrder(queryClient, order.id);
+    },
+    onError: (err) =>
+      toast.error(err instanceof Error ? err.message : "Uppgifterna kunde inte sparas."),
+  });
+
+  const addressLines = formatAddressLines(order.shipping);
+  const carrier = getCarrier(order.carrier);
+  const tracking = trackingLink(order.carrier, order.trackingNumber);
+
+  function set(key: keyof typeof form, value: string) {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  return (
+    <div className="rounded-xl bg-card p-4 shadow-sm">
+      <CardTitle
+        icon={Truck}
+        action={
+          !editing ? (
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="text-xs font-semibold text-primary hover:underline"
+            >
+              Ändra
+            </button>
+          ) : undefined
+        }
+      >
+        Leverans
+      </CardTitle>
+
+      {!editing ? (
+        <div className="mt-3 space-y-3">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Leveransadress
+            </p>
+            {addressLines.length > 0 ? (
+              <div className="mt-1 flex items-start gap-2">
+                <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <div className="min-w-0 flex-1 text-sm text-card-foreground">
+                  {addressLines.map((line) => (
+                    <p key={line} className="truncate">
+                      {line}
+                    </p>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  aria-label="Kopiera adressen"
+                  onClick={() => copyToClipboard(addressLines.join("\n"), "Adressen kopierad.")}
+                  className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ) : (
+              <p className="mt-1 text-sm text-muted-foreground">Ingen adress angiven ännu.</p>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 border-t border-border pt-3">
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Fraktbolag
+              </p>
+              <p className="mt-0.5 truncate text-sm text-card-foreground">{carrier?.name ?? "—"}</p>
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Kollinummer
+              </p>
+              {order.trackingNumber ? (
+                <div className="mt-0.5 flex items-center gap-1.5">
+                  <p className="truncate text-sm text-card-foreground">{order.trackingNumber}</p>
+                  <button
+                    type="button"
+                    aria-label="Kopiera kollinumret"
+                    onClick={() =>
+                      copyToClipboard(order.trackingNumber ?? "", "Kollinumret kopierat.")
+                    }
+                    className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <p className="mt-0.5 text-sm text-muted-foreground">—</p>
+              )}
+            </div>
+          </div>
+
+          {tracking && (
+            <a
+              href={tracking}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-card-foreground transition-colors hover:bg-accent"
+            >
+              Spåra sändningen
+              <ExternalLink className="h-3.5 w-3.5" />
+            </a>
+          )}
+        </div>
+      ) : (
+        <div className="mt-3 space-y-2">
+          <ShippingField
+            label="Mottagare"
+            value={form.recipient}
+            onChange={(v) => set("recipient", v)}
+            placeholder={order.customerName ?? "Företag eller person"}
+          />
+          <ShippingField
+            label="Gatuadress"
+            value={form.street}
+            onChange={(v) => set("street", v)}
+            placeholder="Gata och nummer"
+          />
+          <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-2">
+            <ShippingField
+              label="Postnummer"
+              value={form.postalCode}
+              onChange={(v) => set("postalCode", v)}
+              placeholder="123 45"
+            />
+            <ShippingField
+              label="Ort"
+              value={form.city}
+              onChange={(v) => set("city", v)}
+              placeholder="Ort"
+            />
+          </div>
+          <ShippingField
+            label="Land"
+            value={form.country}
+            onChange={(v) => set("country", v)}
+            placeholder="Sverige"
+          />
+
+          <div className="space-y-1 pt-1">
+            <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Fraktbolag
+            </label>
+            <select
+              value={form.carrier}
+              onChange={(e) => set("carrier", e.target.value)}
+              className="w-full rounded-lg bg-muted/50 px-3 py-2 text-sm text-foreground outline-none"
+            >
+              <option value="">Inte valt</option>
+              {CARRIERS.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <ShippingField
+            label="Kollinummer"
+            value={form.trackingNumber}
+            onChange={(v) => set("trackingNumber", v)}
+            placeholder="Spårningsnummer från fraktbolaget"
+          />
+
+          <div className="flex justify-end gap-2 pt-1">
+            <button
+              type="button"
+              onClick={() => {
+                setForm(initial);
+                setEditing(false);
+              }}
+              className="rounded-full px-3 py-1.5 text-xs font-semibold text-muted-foreground"
+            >
+              Avbryt
+            </button>
+            <button
+              type="button"
+              onClick={() => mutation.mutate()}
+              disabled={mutation.isPending}
+              className="rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-50"
+            >
+              Spara
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ShippingField({
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+}) {
+  return (
+    <div className="space-y-1">
+      <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        {label}
+      </label>
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full rounded-lg bg-muted/50 px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+      />
+    </div>
+  );
+}
+
+// ── Statusflöde ─────────────────────────────────────────────────────────────
 
 function StatusFlowCard({ status }: { status: ShopOrderStatus }) {
   const currentIndex = ORDER_STATUSES.indexOf(status);
@@ -986,6 +1358,8 @@ function StatusFlowCard({ status }: { status: ShopOrderStatus }) {
   );
 }
 
+// ── Artiklar ────────────────────────────────────────────────────────────────
+
 function OrderLines({ order }: { order: ShopOrder }) {
   return (
     <div>
@@ -1026,11 +1400,15 @@ function OrderLines({ order }: { order: ShopOrder }) {
   );
 }
 
+// ── Historik ────────────────────────────────────────────────────────────────
+
 const EVENT_ICON: Record<OrderEvent["type"], typeof Package> = {
   created: Package,
   status_changed: ArrowRight,
   note_updated: NotebookPen,
   comment: MessageSquare,
+  payment_changed: CreditCard,
+  shipping_updated: Truck,
 };
 
 function OrderHistory({ orderId }: { orderId: string }) {
@@ -1050,7 +1428,7 @@ function OrderHistory({ orderId }: { orderId: string }) {
       <div className="rounded-xl bg-muted/50 p-6 text-center">
         <p className="text-sm font-semibold text-card-foreground">Ingen historik ännu</p>
         <p className="mt-1 text-xs text-muted-foreground">
-          Statusändringar, anteckningar och kommentarer loggas här automatiskt.
+          Statusändringar, betalning, frakt, anteckningar och kommentarer loggas här automatiskt.
         </p>
       </div>
     );
@@ -1060,6 +1438,7 @@ function OrderHistory({ orderId }: { orderId: string }) {
     <ol className="space-y-4">
       {events.map((event) => {
         const Icon = EVENT_ICON[event.type];
+        const showDetail = event.detail && event.type !== "payment_changed";
         return (
           <li key={event.id} className="flex gap-3">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
@@ -1067,8 +1446,8 @@ function OrderHistory({ orderId }: { orderId: string }) {
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-sm text-card-foreground">{describeOrderEvent(event)}</p>
-              {event.detail && (
-                <p className="mt-0.5 truncate text-xs text-muted-foreground">“{event.detail}”</p>
+              {showDetail && (
+                <p className="mt-0.5 truncate text-xs text-muted-foreground">”{event.detail}”</p>
               )}
               <p className="mt-0.5 text-[11px] text-muted-foreground">
                 {formatDateTime(event.createdAt)}
@@ -1080,6 +1459,8 @@ function OrderHistory({ orderId }: { orderId: string }) {
     </ol>
   );
 }
+
+// ── Intern anteckning ───────────────────────────────────────────────────────
 
 function InternalNote({ orderId, note }: { orderId: string; note: string }) {
   const queryClient = useQueryClient();
@@ -1095,8 +1476,7 @@ function InternalNote({ orderId, note }: { orderId: string; note: string }) {
     mutationFn: (value: string) => saveNote({ data: { orderId, note: value } }),
     onSuccess: () => {
       toast.success("Anteckningen sparad.");
-      queryClient.invalidateQueries({ queryKey: ["workshop-order", orderId] });
-      queryClient.invalidateQueries({ queryKey: ["order-events", orderId] });
+      invalidateOrder(queryClient, orderId);
     },
     onError: (err) =>
       toast.error(err instanceof Error ? err.message : "Anteckningen kunde inte sparas."),
@@ -1106,10 +1486,7 @@ function InternalNote({ orderId, note }: { orderId: string; note: string }) {
 
   return (
     <div className="rounded-xl bg-card p-4 shadow-sm">
-      <div className="flex items-center gap-2">
-        <NotebookPen className="h-4 w-4 shrink-0 text-primary" />
-        <p className="text-sm font-semibold text-card-foreground">Intern anteckning</p>
-      </div>
+      <CardTitle icon={NotebookPen}>Intern anteckning</CardTitle>
       <p className="mt-1 text-xs text-muted-foreground">
         Syns bara för verkstaden, aldrig för kunden.
       </p>

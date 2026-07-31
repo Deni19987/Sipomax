@@ -17,9 +17,11 @@ import {
   markThreadRead,
   sendChatMessage,
   updateOrderInternalNote,
+  updateOrderPaymentStatus,
+  updateOrderShipping,
   updateShopOrderStatus,
 } from "./shop-orders.server";
-import { ORDER_STATUSES } from "./shop/orders";
+import { ORDER_STATUSES, PAYMENT_STATUSES } from "./shop/orders";
 
 // Kontotyp + utvecklarflagga för den inloggade användaren. Styr om appen
 // visar kundbutiken eller verkstadsvyn efter inloggning.
@@ -114,6 +116,47 @@ export const listOrderEventsFn = createServerFn({ method: "POST" })
   .inputValidator((d) => z.object({ orderId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     return listOrderEvents(context.userId, data.orderId);
+  });
+
+export const updateOrderPaymentStatusFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z
+      .object({
+        orderId: z.string().uuid(),
+        paymentStatus: z.enum(PAYMENT_STATUSES as [string, ...string[]]),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await updateOrderPaymentStatus(
+      context.userId,
+      data.orderId,
+      data.paymentStatus as (typeof PAYMENT_STATUSES)[number],
+    );
+    return { ok: true };
+  });
+
+export const updateOrderShippingFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z
+      .object({
+        orderId: z.string().uuid(),
+        recipient: z.string().max(160).nullable(),
+        street: z.string().max(200).nullable(),
+        postalCode: z.string().max(20).nullable(),
+        city: z.string().max(120).nullable(),
+        country: z.string().max(120).nullable(),
+        carrier: z.string().max(60).nullable(),
+        trackingNumber: z.string().max(120).nullable(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { orderId, ...shipping } = data;
+    await updateOrderShipping(context.userId, orderId, shipping);
+    return { ok: true };
   });
 
 export const listWorkshopMembersFn = createServerFn({ method: "GET" })

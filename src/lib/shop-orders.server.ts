@@ -16,7 +16,15 @@ import {
   type OrderRef,
   type WorkshopMember,
 } from "./shop/chat";
-import type { OrderEvent, OrderEventType, ShopOrder, ShopOrderStatus } from "./shop/orders";
+import type {
+  OrderEvent,
+  OrderEventType,
+  PaymentStatus,
+  ShippingAddress,
+  ShopOrder,
+  ShopOrderStatus,
+} from "./shop/orders";
+import { PAYMENT_STATUS_LABELS } from "./shop/orders";
 
 // De nya butiks-tabellerna finns ännu inte i den plattformsgenererade
 // Database-typen (src/integrations/supabase/types.ts får inte redigeras),
@@ -33,6 +41,14 @@ type OrderRow = {
   customer_phone: string | null;
   status: ShopOrderStatus;
   total: number;
+  payment_status: PaymentStatus;
+  shipping_recipient: string | null;
+  shipping_street: string | null;
+  shipping_postal_code: string | null;
+  shipping_city: string | null;
+  shipping_country: string | null;
+  carrier: string | null;
+  tracking_number: string | null;
   internal_note: string | null;
   created_at: string;
   updated_at: string;
@@ -48,7 +64,7 @@ type LineRow = {
 };
 
 const ORDER_SELECT =
-  "id, order_number, workshop_id, customer_user_id, customer_email, customer_name, customer_phone, status, total, internal_note, created_at, updated_at, shop_order_lines(product_id, name, unit, unit_price, quantity)";
+  "id, order_number, workshop_id, customer_user_id, customer_email, customer_name, customer_phone, status, total, payment_status, shipping_recipient, shipping_street, shipping_postal_code, shipping_city, shipping_country, carrier, tracking_number, internal_note, created_at, updated_at, shop_order_lines(product_id, name, unit, unit_price, quantity)";
 
 function rowToOrder(row: OrderRow): ShopOrder {
   return {
@@ -61,6 +77,16 @@ function rowToOrder(row: OrderRow): ShopOrder {
     customerEmail: row.customer_email,
     customerName: row.customer_name,
     customerPhone: row.customer_phone,
+    paymentStatus: row.payment_status ?? "obetald",
+    shipping: {
+      recipient: row.shipping_recipient,
+      street: row.shipping_street,
+      postalCode: row.shipping_postal_code,
+      city: row.shipping_city,
+      country: row.shipping_country,
+    },
+    carrier: row.carrier,
+    trackingNumber: row.tracking_number,
     lines: (row.shop_order_lines ?? []).map((l) => ({
       productId: l.product_id,
       name: l.name,
@@ -208,7 +234,13 @@ export async function createShopOrder(
 
   const [workshopId, { data: prof }, email] = await Promise.all([
     resolveOrderWorkshopId(userId),
-    admin.from("profiles").select("display_name, contact_phone").eq("id", userId).maybeSingle(),
+    admin
+      .from("profiles")
+      .select(
+        "display_name, contact_phone, company_name, workshop_address, company_zip_code, company_city",
+      )
+      .eq("id", userId)
+      .maybeSingle(),
     getUserAuthEmail(userId),
   ]);
 
@@ -269,6 +301,13 @@ export async function createShopOrder(
       customer_name: prof?.display_name ?? null,
       customer_phone: prof?.contact_phone ?? null,
       total,
+      // Leveransadressen förifylls från kundens profil när den finns —
+      // verkstaden kan alltid justera den på ordern efteråt.
+      shipping_recipient: prof?.company_name || prof?.display_name || null,
+      shipping_street: prof?.workshop_address ?? null,
+      shipping_postal_code: prof?.company_zip_code ?? null,
+      shipping_city: prof?.company_city ?? null,
+      shipping_country: prof?.workshop_address ? "Sverige" : null,
     })
     .select("id")
     .single();
@@ -398,6 +437,71 @@ export async function listOrderRefs(userId: string, query: string): Promise<Orde
     customerName: o.customer_name || o.customer_email || null,
     status: o.status,
   }));
+}
+
+export async function updateOrderPaymentStatus(
+  userId: string,
+  orderId: string,
+  paymentStatus: PaymentStatus,
+): Promise<void> {
+  const workshopId = await assertWorkshopAccount(userId);
+  const { data, error } = await admin
+    .from("shop_orders")
+    .update({ payment_status: paymentStatus })
+    .eq("id", orderId)
+    .eq("workshop_id", workshopId)
+    .select("id");
+  if (error) throw new Error(error.message);
+  if (!data?.length) throw new Error("Beställningen kunde inte hittas.");
+
+  await logOrderEvent({
+    orderId,
+    workshopId,
+    actorId: userId,
+    actorName: await actorNameFor(userId),
+    type: "payment_changed",
+    detail: PAYMENT_STATUS_LABELS[paymentStatus],
+  });
+}
+
+export type ShippingInput = ShippingAddress & {
+  carrier: string | null;
+  trackingNumber: string | null;
+};
+
+export async function updateOrderShipping(
+  userId: string,
+  orderId: string,
+  input: ShippingInput,
+): Promise<void> {
+  const workshopId = await assertWorkshopAccount(userId);
+  const trim = (value: string | null) => value?.trim() || null;
+  const { data, error } = await admin
+    .from("shop_orders")
+    .update({
+      shipping_recipient: trim(input.recipient),
+      shipping_street: trim(input.street),
+      shipping_postal_code: trim(input.postalCode),
+      shipping_city: trim(input.city),
+      shipping_country: trim(input.country),
+      carrier: trim(input.carrier),
+      tracking_number: trim(input.trackingNumber),
+    })
+    .eq("id", orderId)
+    .eq("workshop_id", workshopId)
+    .select("id");
+  if (error) throw new Error(error.message);
+  if (!data?.length) throw new Error("Beställningen kunde inte hittas.");
+
+  const tracking = trim(input.trackingNumber);
+  await logOrderEvent({
+    orderId,
+    workshopId,
+    actorId: userId,
+    actorName: await actorNameFor(userId),
+    type: "shipping_updated",
+    detail: tracking ? `Kollinummer ${tracking}` : null,
+  });
 }
 
 export async function updateOrderInternalNote(

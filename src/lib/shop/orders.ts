@@ -50,7 +50,13 @@ export function previousOrderStatus(status: ShopOrderStatus): ShopOrderStatus | 
 
 // ── Orderhistorik ───────────────────────────────────────────────────────────
 
-export type OrderEventType = "created" | "status_changed" | "note_updated" | "comment";
+export type OrderEventType =
+  | "created"
+  | "status_changed"
+  | "note_updated"
+  | "comment"
+  | "payment_changed"
+  | "shipping_updated";
 
 export interface OrderEvent {
   id: string;
@@ -77,7 +83,105 @@ export function describeOrderEvent(event: OrderEvent): string {
       return `${who} uppdaterade den interna anteckningen`;
     case "comment":
       return `${who} kommenterade ordern`;
+    case "payment_changed":
+      return `${who} ändrade betalstatus till ${event.detail ?? "okänd"}`;
+    case "shipping_updated":
+      return `${who} uppdaterade frakt och leveransadress`;
   }
+}
+
+// ── Betalning ───────────────────────────────────────────────────────────────
+
+export type PaymentStatus = "obetald" | "betald" | "fakturerad" | "aterbetald";
+
+export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
+  obetald: "Obetald",
+  betald: "Betald",
+  fakturerad: "Fakturerad",
+  aterbetald: "Återbetald",
+};
+
+export const PAYMENT_STATUSES = Object.keys(PAYMENT_STATUS_LABELS) as PaymentStatus[];
+
+export const PAYMENT_STATUS_BADGE: Record<PaymentStatus, string> = {
+  obetald: "bg-rose-100 text-rose-700",
+  betald: "bg-emerald-100 text-emerald-700",
+  fakturerad: "bg-sky-100 text-sky-700",
+  aterbetald: "bg-neutral-200 text-neutral-700",
+};
+
+// ── Frakt ───────────────────────────────────────────────────────────────────
+
+export type CarrierInfo = {
+  id: string;
+  name: string;
+  /** {id} byts mot kollinumret. Saknas den går sändningen inte att spåra. */
+  trackingUrl?: string;
+};
+
+export const CARRIERS: CarrierInfo[] = [
+  {
+    id: "postnord",
+    name: "PostNord",
+    trackingUrl: "https://www.postnord.se/vara-verktyg/spara-brev-paket-och-pall?shipmentId={id}",
+  },
+  {
+    id: "dhl",
+    name: "DHL",
+    trackingUrl: "https://www.dhl.com/se-sv/home/spara.html?tracking-id={id}",
+  },
+  {
+    id: "schenker",
+    name: "DB Schenker",
+    trackingUrl: "https://www.dbschenker.com/app/tracking-public/?refNumber={id}&refType=stt",
+  },
+  { id: "bring", name: "Bring", trackingUrl: "https://tracking.bring.com/tracking.html?q={id}" },
+  { id: "budbee", name: "Budbee", trackingUrl: "https://tracking.budbee.com/{id}" },
+  { id: "egen", name: "Egen leverans" },
+  { id: "upphamtning", name: "Upphämtning i verkstaden" },
+];
+
+export function getCarrier(id: string | null): CarrierInfo | undefined {
+  return id ? CARRIERS.find((c) => c.id === id) : undefined;
+}
+
+export function trackingLink(
+  carrierId: string | null,
+  trackingNumber: string | null,
+): string | null {
+  const carrier = getCarrier(carrierId);
+  if (!carrier?.trackingUrl || !trackingNumber?.trim()) return null;
+  return carrier.trackingUrl.replace("{id}", encodeURIComponent(trackingNumber.trim()));
+}
+
+// ── Leveransadress ──────────────────────────────────────────────────────────
+
+export interface ShippingAddress {
+  recipient: string | null;
+  street: string | null;
+  postalCode: string | null;
+  city: string | null;
+  country: string | null;
+}
+
+export const EMPTY_ADDRESS: ShippingAddress = {
+  recipient: null,
+  street: null,
+  postalCode: null,
+  city: null,
+  country: null,
+};
+
+export function hasAddress(address: ShippingAddress): boolean {
+  return !!(address.street?.trim() || address.city?.trim() || address.postalCode?.trim());
+}
+
+/** Adressen som rader, redo att visas eller kopieras till en fraktsedel. */
+export function formatAddressLines(address: ShippingAddress): string[] {
+  const postal = [address.postalCode, address.city].filter((p) => p?.trim()).join(" ");
+  return [address.recipient, address.street, postal, address.country]
+    .map((line) => line?.trim())
+    .filter((line): line is string => !!line);
 }
 
 export interface ShopOrderLine {
@@ -100,6 +204,11 @@ export interface ShopOrder {
   customerEmail: string | null;
   customerName: string | null;
   customerPhone: string | null;
+  // Betalning och frakt.
+  paymentStatus: PaymentStatus;
+  shipping: ShippingAddress;
+  carrier: string | null;
+  trackingNumber: string | null;
   // Verkstadsintern info — bara satt i verkstadsvyn.
   internalNote?: string | null;
   messageCount?: number;

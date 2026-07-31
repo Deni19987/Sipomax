@@ -122,3 +122,40 @@ select w.order_id, w.workshop_id, w.sender_id, w.sender_name, 'comment', left(w.
 from public.workshop_messages w
 where w.sender_id = '22222222-0000-4000-8000-000000000001';
 commit;
+
+-- ── Betalstatus, leveransadress och frakt på demoordrarna ──────────────────
+begin;
+with d(n, pay, street, zip, city, carrier, track) as (values
+(1,'obetald','Verkstadsgatan 12','431 37','Mölndal',null,null),
+(2,'obetald','Hamnvägen 4','434 37','Kungsbacka',null,null),
+(3,'fakturerad','Industrigatan 8','212 28','Malmö',null,null),
+(4,'obetald','Backavägen 22','504 31','Borås',null,null),
+(5,'betald','Motorvägen 3','702 27','Örebro',null,null),
+(6,'betald','Bilvårdsvägen 9','421 32','Västra Frölunda',null,null),
+(7,'fakturerad','Kungsgatan 44','753 21','Uppsala',null,null),
+(8,'betald','Däckvägen 17','611 35','Nyköping',null,null),
+(9,'obetald','Lackgatan 5','582 78','Linköping',null,null),
+(10,'betald','Rekondvägen 2','215 32','Malmö',null,null),
+(11,'betald','Skinnargatan 11','118 60','Stockholm','postnord','PN123456789SE'),
+(12,'betald','Östra Industrivägen 6','602 28','Norrköping','schenker','SCH-99120045'),
+(13,'fakturerad','Prestigevägen 1','182 33','Danderyd','dhl','DHL7788991234'),
+(14,'betald','Lagergatan 30','506 30','Borås','postnord','PN987654321SE'),
+(15,'betald','Glansvägen 7','703 62','Örebro','bring','BRG552104477'),
+(16,'fakturerad','Truckgatan 25','931 57','Skellefteå','schenker','SCH-44870021'),
+(17,'betald','Direktvägen 14','252 30','Helsingborg','postnord','PN551122334SE'),
+(18,'betald','Rekondgatan 18','417 05','Göteborg','dhl','DHL5544332211'),
+(19,'aterbetald','Marinvägen 9','452 30','Strömstad','budbee','BB77219940'),
+(20,'betald','Norrlandsgatan 3','903 26','Umeå','egen',null)
+)
+update public.shop_orders o
+set payment_status = d.pay,
+    shipping_recipient = o.customer_name,
+    shipping_street = d.street,
+    shipping_postal_code = d.zip,
+    shipping_city = d.city,
+    shipping_country = 'Sverige',
+    carrier = d.carrier,
+    tracking_number = d.track
+from d
+where o.id = ('11111111-0000-4000-8000-'||lpad(d.n::text,12,'0'))::uuid;
+commit;
