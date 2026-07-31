@@ -9,6 +9,7 @@ import {
   FreeShippingBanner,
   OrderCard,
 } from "@/components/shop/cards";
+import { AppSplash } from "@/components/app-splash";
 import { useShopExtras } from "@/lib/shop/use-shop-extras";
 import { ShopShell, SipomaxWordmark } from "@/components/shop/ShopShell";
 import { useAuth } from "@/hooks/use-auth";
@@ -96,6 +97,13 @@ function HomePage() {
   const { getCampaign } = useShopExtras();
   const announcement = getCampaign("announcement");
   const shippingCampaign = getCampaign("free_shipping");
+
+  // Vänta ut kontotypen innan butiken ritas. Verkstadskonton skickas vidare av
+  // effekten ovan, och utan den här spärren hinner kundvyns telefonskal
+  // blinka förbi först.
+  if (user && (!accountInfo || accountInfo.accountType === "workshop")) {
+    return <AppSplash />;
+  }
 
   return (
     <ShopShell>

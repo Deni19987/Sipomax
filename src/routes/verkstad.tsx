@@ -8,6 +8,7 @@ import {
   ImpersonationBanner,
   useAccountSwitcher,
 } from "@/components/AccountSwitcher";
+import { AppSplash } from "@/components/app-splash";
 import { SipomaxLogo } from "@/components/SipomaxLogo";
 import { Toaster } from "@/components/ui/sonner";
 import { useAuth } from "@/hooks/use-auth";
@@ -65,6 +66,12 @@ function WorkshopLayout() {
   }
 
   const accountLabel = accountInfo?.displayName || user?.email || "";
+
+  // Spegelbilden av spärren i butiken: rita inte verkstadsskalet förrän vi vet
+  // att kontot hör hemma här.
+  if (user && (!accountInfo || accountInfo.accountType === "customer")) {
+    return <AppSplash />;
+  }
 
   return (
     <div className="min-h-screen bg-neutral-100">
