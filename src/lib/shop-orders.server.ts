@@ -8,6 +8,7 @@ import {
 } from "./profile.server";
 import { sendPushToUser, sendPushToWorkshop } from "./push.server";
 import { getProduct } from "./shop/catalog";
+import { EMPTY_DELIVERY, type DeliveryDetails } from "./shop/delivery";
 import {
   GENERAL_THREAD,
   plainChatBody,
@@ -49,6 +50,7 @@ type OrderRow = {
   shipping_country: string | null;
   carrier: string | null;
   tracking_number: string | null;
+  note: string | null;
   internal_note: string | null;
   created_at: string;
   updated_at: string;
@@ -64,7 +66,7 @@ type LineRow = {
 };
 
 const ORDER_SELECT =
-  "id, order_number, workshop_id, customer_user_id, customer_email, customer_name, customer_phone, status, total, payment_status, shipping_recipient, shipping_street, shipping_postal_code, shipping_city, shipping_country, carrier, tracking_number, internal_note, created_at, updated_at, shop_order_lines(product_id, name, unit, unit_price, quantity)";
+  "id, order_number, workshop_id, customer_user_id, customer_email, customer_name, customer_phone, status, total, note, payment_status, shipping_recipient, shipping_street, shipping_postal_code, shipping_city, shipping_country, carrier, tracking_number, internal_note, created_at, updated_at, shop_order_lines(product_id, name, unit, unit_price, quantity)";
 
 function rowToOrder(row: OrderRow): ShopOrder {
   return {
@@ -87,6 +89,7 @@ function rowToOrder(row: OrderRow): ShopOrder {
     },
     carrier: row.carrier,
     trackingNumber: row.tracking_number,
+    deliveryNote: row.note,
     lines: (row.shop_order_lines ?? []).map((l) => ({
       productId: l.product_id,
       name: l.name,
@@ -224,23 +227,102 @@ export async function listOrderEvents(userId: string, orderId: string): Promise<
   }));
 }
 
+// ── Kundkortet: sparade leveransuppgifter ───────────────────────────────────
+
+const DELIVERY_SELECT =
+  "delivery_recipient, delivery_street, delivery_postal_code, delivery_city, delivery_country, delivery_note, contact_phone, display_name, company_name";
+
+type DeliveryRow = {
+  delivery_recipient: string | null;
+  delivery_street: string | null;
+  delivery_postal_code: string | null;
+  delivery_city: string | null;
+  delivery_country: string | null;
+  delivery_note: string | null;
+  contact_phone: string | null;
+  display_name: string | null;
+  company_name: string | null;
+};
+
+/**
+ * Kundens sparade leveransuppgifter. Har kunden inte sparat något ännu
+ * förifylls mottagaren med företags- eller kontonamnet, så att formuläret
+ * sällan är helt tomt.
+ */
+export async function getDeliveryDetails(userId: string): Promise<{
+  details: DeliveryDetails;
+  saved: boolean;
+}> {
+  const { data, error } = await admin
+    .from("profiles")
+    .select(DELIVERY_SELECT)
+    .eq("id", userId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  const row = (data ?? null) as DeliveryRow | null;
+  const saved = !!row?.delivery_street?.trim();
+
+  return {
+    saved,
+    details: {
+      ...EMPTY_DELIVERY,
+      recipient: row?.delivery_recipient || row?.company_name || row?.display_name || "",
+      street: row?.delivery_street ?? "",
+      postalCode: row?.delivery_postal_code ?? "",
+      city: row?.delivery_city ?? "",
+      country: row?.delivery_country || EMPTY_DELIVERY.country,
+      phone: row?.contact_phone ?? "",
+      note: row?.delivery_note ?? "",
+    },
+  };
+}
+
+export async function saveDeliveryDetails(userId: string, details: DeliveryDetails): Promise<void> {
+  const value = (input: string) => input.trim() || null;
+  const { error } = await admin
+    .from("profiles")
+    .update({
+      delivery_recipient: value(details.recipient),
+      delivery_street: value(details.street),
+      delivery_postal_code: value(details.postalCode),
+      delivery_city: value(details.city),
+      delivery_country: value(details.country),
+      delivery_note: value(details.note),
+      contact_phone: value(details.phone),
+    })
+    .eq("id", userId);
+  if (error) throw new Error(error.message);
+}
+
+/** Tömmer kundkortets sparade uppgifter. */
+export async function clearDeliveryDetails(userId: string): Promise<void> {
+  const { error } = await admin
+    .from("profiles")
+    .update({
+      delivery_recipient: null,
+      delivery_street: null,
+      delivery_postal_code: null,
+      delivery_city: null,
+      delivery_country: null,
+      delivery_note: null,
+    })
+    .eq("id", userId);
+  if (error) throw new Error(error.message);
+}
+
 // ── Kund: lägga och läsa ordrar ─────────────────────────────────────────────
 
 export async function createShopOrder(
   userId: string,
   items: Array<{ productId: string; quantity: number }>,
+  delivery: DeliveryDetails,
+  saveDetails: boolean,
 ): Promise<ShopOrder> {
   if (items.length === 0) throw new Error("Varukorgen är tom.");
 
   const [workshopId, { data: prof }, email] = await Promise.all([
     resolveOrderWorkshopId(userId),
-    admin
-      .from("profiles")
-      .select(
-        "display_name, contact_phone, company_name, workshop_address, company_zip_code, company_city",
-      )
-      .eq("id", userId)
-      .maybeSingle(),
+    admin.from("profiles").select("display_name, company_name").eq("id", userId).maybeSingle(),
     getUserAuthEmail(userId),
   ]);
 
@@ -299,15 +381,16 @@ export async function createShopOrder(
       customer_user_id: userId,
       customer_email: email,
       customer_name: prof?.display_name ?? null,
-      customer_phone: prof?.contact_phone ?? null,
+      customer_phone: delivery.phone.trim() || null,
       total,
-      // Leveransadressen förifylls från kundens profil när den finns —
-      // verkstaden kan alltid justera den på ordern efteråt.
-      shipping_recipient: prof?.company_name || prof?.display_name || null,
-      shipping_street: prof?.workshop_address ?? null,
-      shipping_postal_code: prof?.company_zip_code ?? null,
-      shipping_city: prof?.company_city ?? null,
-      shipping_country: prof?.workshop_address ? "Sverige" : null,
+      // Leveransuppgifterna kommer från kassan. Verkstaden kan justera dem på
+      // ordern efteråt utan att kundens sparade uppgifter ändras.
+      shipping_recipient: delivery.recipient.trim() || null,
+      shipping_street: delivery.street.trim() || null,
+      shipping_postal_code: delivery.postalCode.trim() || null,
+      shipping_city: delivery.city.trim() || null,
+      shipping_country: delivery.country.trim() || null,
+      note: delivery.note.trim() || null,
     })
     .select("id")
     .single();
@@ -319,6 +402,16 @@ export async function createShopOrder(
   if (lineError) {
     await admin.from("shop_orders").delete().eq("id", order.id);
     throw new Error(lineError.message);
+  }
+
+  // Kunden kan välja att spara uppgifterna på sitt kundkort. Ett fel här får
+  // inte fälla en order som redan är lagd.
+  if (saveDetails) {
+    try {
+      await saveDeliveryDetails(userId, delivery);
+    } catch (err) {
+      console.error("[shop] could not save delivery details", err);
+    }
   }
 
   await logOrderEvent({

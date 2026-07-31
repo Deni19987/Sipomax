@@ -1171,6 +1171,15 @@ function ShippingCard({ order }: { order: ShopOrder }) {
             </div>
           </div>
 
+          {order.deliveryNote && (
+            <div className="border-t border-border pt-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Kundens instruktion
+              </p>
+              <p className="mt-0.5 text-sm text-card-foreground">”{order.deliveryNote}”</p>
+            </div>
+          )}
+
           {tracking && (
             <a
               href={tracking}

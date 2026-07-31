@@ -209,6 +209,8 @@ export interface ShopOrder {
   shipping: ShippingAddress;
   carrier: string | null;
   trackingNumber: string | null;
+  /** Kundens leveransinstruktion från kassan. */
+  deliveryNote: string | null;
   // Verkstadsintern info — bara satt i verkstadsvyn.
   internalNote?: string | null;
   messageCount?: number;

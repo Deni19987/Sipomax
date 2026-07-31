@@ -1,6 +1,6 @@
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Building2,
   ChevronRight,
@@ -10,7 +10,9 @@ import {
   Mail,
   MapPin,
   Package,
+  Pencil,
   Phone,
+  Truck,
   UserRound,
   Wrench,
 } from "lucide-react";
@@ -25,7 +27,22 @@ import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { clearAccountType } from "@/lib/account-landing";
 import { DEV_SESSION_KEY } from "@/lib/impersonation-client";
+import {
+  clearMyDeliveryDetailsFn,
+  getMyDeliveryDetailsFn,
+  saveMyDeliveryDetailsFn,
+} from "@/lib/shop-orders.functions";
 import { getMyAccountInfo } from "@/lib/shop-orders.functions";
+import {
+  EMPTY_DELIVERY,
+  deliveryLines,
+  describeMissingFields,
+  missingDeliveryFields,
+  normalizeDelivery,
+  type DeliveryDetails,
+} from "@/lib/shop/delivery";
+import { useEffect, useState } from "react";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/konto")({
   ssr: false,
@@ -133,6 +150,8 @@ function AccountPage() {
           </div>
         </div>
 
+        {user && <DeliveryCard />}
+
         <div className="rounded-xl bg-card p-4 shadow-sm">
           <h2 className="flex items-center gap-2 text-sm font-bold text-card-foreground">
             <Building2 className="h-4 w-4 text-primary" />
@@ -152,5 +171,196 @@ function AccountPage() {
         </div>
       </div>
     </ShopShell>
+  );
+}
+
+/** Sparade leveransuppgifter — förifyller kassan vid nästa beställning. */
+function DeliveryCard() {
+  const queryClient = useQueryClient();
+  const fetchDelivery = useServerFn(getMyDeliveryDetailsFn);
+  const saveDelivery = useServerFn(saveMyDeliveryDetailsFn);
+  const clearDelivery = useServerFn(clearMyDeliveryDetailsFn);
+
+  const { data } = useQuery({
+    queryKey: ["my-delivery-details"],
+    queryFn: () => fetchDelivery(),
+  });
+
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState<DeliveryDetails>(EMPTY_DELIVERY);
+  useEffect(() => {
+    if (data) setForm(data.details);
+  }, [data]);
+
+  function invalidate() {
+    queryClient.invalidateQueries({ queryKey: ["my-delivery-details"] });
+  }
+
+  const saveMutation = useMutation({
+    mutationFn: () => saveDelivery({ data: normalizeDelivery(form) }),
+    onSuccess: () => {
+      toast.success("Leveransuppgifterna sparade.");
+      setEditing(false);
+      invalidate();
+    },
+    onError: (err) =>
+      toast.error(err instanceof Error ? err.message : "Uppgifterna kunde inte sparas."),
+  });
+
+  const clearMutation = useMutation({
+    mutationFn: () => clearDelivery(),
+    onSuccess: () => {
+      toast.success("Sparade uppgifter borttagna.");
+      setEditing(false);
+      invalidate();
+    },
+    onError: (err) =>
+      toast.error(err instanceof Error ? err.message : "Uppgifterna kunde inte tas bort."),
+  });
+
+  const lines = data ? deliveryLines(data.details) : [];
+
+  return (
+    <div className="rounded-xl bg-card p-4 shadow-sm">
+      <div className="flex items-center gap-2">
+        <Truck className="h-4 w-4 shrink-0 text-primary" />
+        <h2 className="flex-1 text-sm font-bold text-card-foreground">Leveransuppgifter</h2>
+        {!editing && (
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="flex items-center gap-1 text-xs font-semibold text-primary"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+            {data?.saved ? "Ändra" : "Lägg till"}
+          </button>
+        )}
+      </div>
+
+      {!editing ? (
+        data?.saved ? (
+          <div className="mt-3 space-y-1 text-sm text-muted-foreground">
+            {lines.map((line) => (
+              <p key={line}>{line}</p>
+            ))}
+            {data.details.phone && <p>{data.details.phone}</p>}
+            {data.details.note && <p className="text-xs italic">”{data.details.note}”</p>}
+            <p className="pt-2 text-xs text-muted-foreground">
+              Fylls i automatiskt när du beställer.
+            </p>
+          </div>
+        ) : (
+          <p className="mt-3 text-xs text-muted-foreground">
+            Inga sparade uppgifter ännu. Fyll i dem i kassan och kryssa i ”Spara på mitt kundkort”,
+            eller lägg till dem här.
+          </p>
+        )
+      ) : (
+        <div className="mt-3 space-y-2">
+          <AccountField
+            label="Mottagare"
+            value={form.recipient}
+            onChange={(v) => setForm((p) => ({ ...p, recipient: v }))}
+          />
+          <AccountField
+            label="Gatuadress"
+            value={form.street}
+            onChange={(v) => setForm((p) => ({ ...p, street: v }))}
+          />
+          <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] gap-2">
+            <AccountField
+              label="Postnummer"
+              value={form.postalCode}
+              onChange={(v) => setForm((p) => ({ ...p, postalCode: v }))}
+            />
+            <AccountField
+              label="Ort"
+              value={form.city}
+              onChange={(v) => setForm((p) => ({ ...p, city: v }))}
+            />
+          </div>
+          <AccountField
+            label="Land"
+            value={form.country}
+            onChange={(v) => setForm((p) => ({ ...p, country: v }))}
+          />
+          <AccountField
+            label="Telefon vid leverans"
+            value={form.phone}
+            onChange={(v) => setForm((p) => ({ ...p, phone: v }))}
+          />
+          <AccountField
+            label="Leveransinstruktion (valfritt)"
+            value={form.note}
+            onChange={(v) => setForm((p) => ({ ...p, note: v }))}
+          />
+
+          <div className="flex items-center gap-2 pt-1">
+            {data?.saved && (
+              <button
+                type="button"
+                onClick={() => clearMutation.mutate()}
+                disabled={clearMutation.isPending}
+                className="rounded-full px-3 py-1.5 text-xs font-semibold text-destructive"
+              >
+                Ta bort
+              </button>
+            )}
+            <div className="ml-auto flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (data) setForm(data.details);
+                  setEditing(false);
+                }}
+                className="rounded-full px-3 py-1.5 text-xs font-semibold text-muted-foreground"
+              >
+                Avbryt
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const missing = missingDeliveryFields(form);
+                  if (missing.length > 0) {
+                    toast.error(describeMissingFields(missing));
+                    return;
+                  }
+                  saveMutation.mutate();
+                }}
+                disabled={saveMutation.isPending}
+                className="rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-50"
+              >
+                Spara
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AccountField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="space-y-1">
+      <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        {label}
+      </label>
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={cn(
+          "w-full rounded-lg bg-muted/50 px-3 py-2.5 text-sm text-foreground outline-none",
+        )}
+      />
+    </div>
   );
 }

@@ -1,8 +1,8 @@
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useQueryClient } from "@tanstack/react-query";
-import { Minus, Plus, ShoppingCart, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Check, MapPin, Minus, Plus, ShoppingCart, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { CartShippingBubble } from "@/components/shop/cards";
 import { ShopShell } from "@/components/shop/ShopShell";
@@ -10,8 +10,49 @@ import { CATEGORY_ICONS } from "@/components/shop/category-icons";
 import { FREE_SHIPPING_THRESHOLD, formatPrice, getCategory } from "@/lib/shop/catalog";
 import { useCart } from "@/lib/shop/cart";
 import { useShopExtras } from "@/lib/shop/use-shop-extras";
-import { placeShopOrderFn } from "@/lib/shop-orders.functions";
+import { getMyDeliveryDetailsFn, placeShopOrderFn } from "@/lib/shop-orders.functions";
+import {
+  EMPTY_DELIVERY,
+  describeMissingFields,
+  missingDeliveryFields,
+  normalizeDelivery,
+  type DeliveryDetails,
+} from "@/lib/shop/delivery";
 import { cn } from "@/lib/utils";
+
+function Field({
+  label,
+  value,
+  onChange,
+  placeholder,
+  inputMode,
+  invalid,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  inputMode?: "numeric" | "tel";
+  invalid?: boolean;
+}) {
+  return (
+    <div className="space-y-1">
+      <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        {label}
+      </label>
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        inputMode={inputMode}
+        className={cn(
+          "w-full rounded-lg bg-muted/50 px-3 py-2.5 text-sm text-foreground outline-none placeholder:text-muted-foreground",
+          invalid && "ring-2 ring-destructive",
+        )}
+      />
+    </div>
+  );
+}
 
 export const Route = createFileRoute("/varukorg")({
   ssr: false,
@@ -23,17 +64,43 @@ function CartPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const placeOrder = useServerFn(placeShopOrderFn);
+  const fetchDelivery = useServerFn(getMyDeliveryDetailsFn);
   const [sending, setSending] = useState(false);
+
+  // Sparade uppgifter från kundkortet förifyller formuläret.
+  const { data: savedDelivery } = useQuery({
+    queryKey: ["my-delivery-details"],
+    queryFn: () => fetchDelivery(),
+  });
+  const [delivery, setDelivery] = useState<DeliveryDetails>(EMPTY_DELIVERY);
+  const [saveDetails, setSaveDetails] = useState(true);
+  const [showErrors, setShowErrors] = useState(false);
+
+  useEffect(() => {
+    if (savedDelivery) setDelivery(savedDelivery.details);
+  }, [savedDelivery]);
+
+  const missing = missingDeliveryFields(delivery);
 
   async function submitOrder() {
     if (sending || lines.length === 0) return;
+    if (missing.length > 0) {
+      setShowErrors(true);
+      toast.error(describeMissingFields(missing));
+      return;
+    }
     setSending(true);
     try {
       const order = await placeOrder({
-        data: { items: lines.map((l) => ({ productId: l.productId, quantity: l.quantity })) },
+        data: {
+          items: lines.map((l) => ({ productId: l.productId, quantity: l.quantity })),
+          delivery: normalizeDelivery(delivery),
+          saveDetails,
+        },
       });
       clearCart();
       queryClient.invalidateQueries({ queryKey: ["my-shop-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["my-delivery-details"] });
       toast.success(`Beställning #${order.orderNumber} skickad!`);
       navigate({ to: "/bestallningar/$id", params: { id: order.id } });
     } catch (err) {
@@ -41,6 +108,10 @@ function CartPage() {
     } finally {
       setSending(false);
     }
+  }
+
+  function set(key: keyof DeliveryDetails, value: string) {
+    setDelivery((prev) => ({ ...prev, [key]: value }));
   }
 
   // Aktiv frifrakt-kampanj styr gränsen; annars gäller standardgränsen.
@@ -150,6 +221,97 @@ function CartPage() {
               title={shippingCampaign?.title}
               total={total}
             />
+
+            <div className="rounded-xl bg-card p-4 shadow-sm">
+              <h2 className="flex items-center gap-2 text-sm font-bold text-card-foreground">
+                <MapPin className="h-4 w-4 text-primary" />
+                Leveransuppgifter
+              </h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {savedDelivery?.saved
+                  ? "Hämtat från ditt kundkort. Ändra om leveransen ska någon annanstans."
+                  : "Vart ska beställningen levereras?"}
+              </p>
+
+              <div className="mt-3 space-y-2">
+                <Field
+                  label="Mottagare"
+                  value={delivery.recipient}
+                  onChange={(v) => set("recipient", v)}
+                  placeholder="Företag eller person"
+                  invalid={showErrors && missing.includes("recipient")}
+                />
+                <Field
+                  label="Gatuadress"
+                  value={delivery.street}
+                  onChange={(v) => set("street", v)}
+                  placeholder="Gata och nummer"
+                  invalid={showErrors && missing.includes("street")}
+                />
+                <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] gap-2">
+                  <Field
+                    label="Postnummer"
+                    value={delivery.postalCode}
+                    onChange={(v) => set("postalCode", v)}
+                    placeholder="123 45"
+                    inputMode="numeric"
+                    invalid={showErrors && missing.includes("postalCode")}
+                  />
+                  <Field
+                    label="Ort"
+                    value={delivery.city}
+                    onChange={(v) => set("city", v)}
+                    placeholder="Ort"
+                    invalid={showErrors && missing.includes("city")}
+                  />
+                </div>
+                <Field
+                  label="Land"
+                  value={delivery.country}
+                  onChange={(v) => set("country", v)}
+                  placeholder="Sverige"
+                />
+                <Field
+                  label="Telefon vid leverans"
+                  value={delivery.phone}
+                  onChange={(v) => set("phone", v)}
+                  placeholder="070-123 45 67"
+                  inputMode="tel"
+                  invalid={showErrors && missing.includes("phone")}
+                />
+                <Field
+                  label="Leveransinstruktion (valfritt)"
+                  value={delivery.note}
+                  onChange={(v) => set("note", v)}
+                  placeholder="T.ex. lastkaj på baksidan"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSaveDetails((prev) => !prev)}
+                className="mt-4 flex w-full items-center gap-3 rounded-lg bg-muted/50 p-3 text-left"
+              >
+                <span
+                  className={cn(
+                    "flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors",
+                    saveDetails
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border bg-card",
+                  )}
+                >
+                  {saveDetails && <Check className="h-3.5 w-3.5" />}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-medium text-card-foreground">
+                    Spara på mitt kundkort
+                  </span>
+                  <span className="block text-xs text-muted-foreground">
+                    Uppgifterna fylls i automatiskt nästa gång du beställer.
+                  </span>
+                </span>
+              </button>
+            </div>
 
             <div className="rounded-xl bg-card p-4 shadow-sm">
               <div className="flex items-center justify-between text-sm text-muted-foreground">

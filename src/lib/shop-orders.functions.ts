@@ -2,8 +2,10 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import {
+  clearDeliveryDetails,
   createShopOrder,
   getAccountInfo,
+  getDeliveryDetails,
   getOrderForCustomer,
   getWorkshopOrder,
   getWorkshopStats,
@@ -15,6 +17,7 @@ import {
   listWorkshopMembers,
   listWorkshopOrders,
   markThreadRead,
+  saveDeliveryDetails,
   sendChatMessage,
   updateOrderInternalNote,
   updateOrderPaymentStatus,
@@ -33,6 +36,16 @@ export const getMyAccountInfo = createServerFn({ method: "GET" })
 
 // ── Kund ────────────────────────────────────────────────────────────────────
 
+const deliverySchema = z.object({
+  recipient: z.string().trim().min(1).max(160),
+  street: z.string().trim().min(1).max(200),
+  postalCode: z.string().trim().min(1).max(20),
+  city: z.string().trim().min(1).max(120),
+  country: z.string().trim().max(120).default("Sverige"),
+  phone: z.string().trim().min(1).max(40),
+  note: z.string().trim().max(500).default(""),
+});
+
 export const placeShopOrderFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) =>
@@ -47,11 +60,35 @@ export const placeShopOrderFn = createServerFn({ method: "POST" })
           )
           .min(1)
           .max(100),
+        delivery: deliverySchema,
+        saveDetails: z.boolean().default(false),
       })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
-    return createShopOrder(context.userId, data.items);
+    return createShopOrder(context.userId, data.items, data.delivery, data.saveDetails);
+  });
+
+// Sparade leveransuppgifter på kundkortet — förifyller kassan.
+export const getMyDeliveryDetailsFn = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    return getDeliveryDetails(context.userId);
+  });
+
+export const saveMyDeliveryDetailsFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => deliverySchema.parse(d))
+  .handler(async ({ data, context }) => {
+    await saveDeliveryDetails(context.userId, data);
+    return { ok: true };
+  });
+
+export const clearMyDeliveryDetailsFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await clearDeliveryDetails(context.userId);
+    return { ok: true };
   });
 
 export const listMyShopOrdersFn = createServerFn({ method: "GET" })
