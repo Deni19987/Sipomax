@@ -23,6 +23,7 @@ import {
 import { ShopShell } from "@/components/shop/ShopShell";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
+import { clearAccountType } from "@/lib/account-landing";
 import { DEV_SESSION_KEY } from "@/lib/impersonation-client";
 import { getMyAccountInfo } from "@/lib/shop-orders.functions";
 
@@ -91,6 +92,7 @@ function AccountPage() {
                 type="button"
                 onClick={async () => {
                   localStorage.removeItem(DEV_SESSION_KEY);
+                  clearAccountType();
                   await supabase.auth.signOut();
                   toast.success("Du är utloggad");
                   navigate({ to: "/login", viewTransition: false });

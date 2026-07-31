@@ -1,4 +1,4 @@
-import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Link, createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import { Search, UserRound } from "lucide-react";
@@ -9,7 +9,7 @@ import {
   FreeShippingBanner,
   OrderCard,
 } from "@/components/shop/cards";
-import { AppSplash } from "@/components/app-splash";
+import { cacheAccountType, readCachedAccountType, resolveAccountType } from "@/lib/account-landing";
 import { useShopExtras } from "@/lib/shop/use-shop-extras";
 import { ShopShell, SipomaxWordmark } from "@/components/shop/ShopShell";
 import { useAuth } from "@/hooks/use-auth";
@@ -20,6 +20,19 @@ export const Route = createFileRoute("/")({
   // ssr: false så att varukorg/beställningar (localStorage) inte ger
   // hydration-mismatch, och så att auth-landningar kan fångas nedan.
   ssr: false,
+  // Verkstadskonton ska aldrig se butiken. Beslutet tas här, före render, så
+  // att kundvyn inte hinner blinka förbi. Är kontotypen redan känd sedan
+  // tidigare besök sker det utan att vänta på nätverket.
+  beforeLoad: async () => {
+    if (typeof window === "undefined" || isAuthLanding()) return;
+    const cached = readCachedAccountType();
+    if (cached === "workshop") throw redirect({ to: "/verkstad" });
+    if (cached === "customer") {
+      void resolveAccountType(true); // verifiera i bakgrunden
+      return;
+    }
+    if ((await resolveAccountType()) === "workshop") throw redirect({ to: "/verkstad" });
+  },
   component: HomePage,
 });
 
@@ -55,10 +68,13 @@ function HomePage() {
     enabled: !!user,
   });
 
-  // Verkstadskonton (inkl. utvecklarkontot) landar i verkstadsvyn — butiken
-  // är kundernas vy. Utvecklaren når butiken genom att byta till ett kundkonto.
+  // Skyddsnät: beforeLoad har redan skickat vidare verkstadskonton, men om
+  // kontotypen ändras under sessionen (utvecklaren byter konto) fångas det här.
+  // Serverns svar är också facit för cachen som beforeLoad läser.
   useEffect(() => {
-    if (accountInfo?.accountType === "workshop" && !isAuthLanding()) {
+    if (!accountInfo) return;
+    cacheAccountType(accountInfo.accountType);
+    if (accountInfo.accountType === "workshop" && !isAuthLanding()) {
       navigate({ to: "/verkstad", replace: true });
     }
   }, [accountInfo, navigate]);
@@ -97,13 +113,6 @@ function HomePage() {
   const { getCampaign } = useShopExtras();
   const announcement = getCampaign("announcement");
   const shippingCampaign = getCampaign("free_shipping");
-
-  // Vänta ut kontotypen innan butiken ritas. Verkstadskonton skickas vidare av
-  // effekten ovan, och utan den här spärren hinner kundvyns telefonskal
-  // blinka förbi först.
-  if (user && (!accountInfo || accountInfo.accountType === "workshop")) {
-    return <AppSplash />;
-  }
 
   return (
     <ShopShell>

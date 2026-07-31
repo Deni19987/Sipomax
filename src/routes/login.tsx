@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useScrollTopOnMount } from "@/hooks/use-scroll-top";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { landingPathFor, resolveAccountType } from "@/lib/account-landing";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -196,7 +197,8 @@ function LoginPage() {
       // landing) or if PASSWORD_RECOVERY has already been handled.
       if (_hasCode || recoveryHandledRef.current) return;
       if (session) {
-        navigate({ to: "/" });
+        // Gå direkt till rätt app i stället för att studsa via butiken.
+        navigate({ to: landingPathFor(await resolveAccountType(true)) });
       } else {
         setPhase("login");
       }
@@ -216,8 +218,9 @@ function LoginPage() {
         password: loginPassword,
       });
       if (error) throw error;
-      armBrandHeroMorph();
-      navigate({ to: "/", viewTransition: true });
+      const landing = landingPathFor(await resolveAccountType(true));
+      if (landing === "/") armBrandHeroMorph();
+      navigate({ to: landing, viewTransition: true });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "";
       const isCredError =
@@ -275,8 +278,9 @@ function LoginPage() {
       if (error) throw error;
       if (data.session) {
         // Email confirmation disabled → the user is signed in immediately.
-        armBrandHeroMorph();
-        navigate({ to: "/", viewTransition: true });
+        const landing = landingPathFor(await resolveAccountType(true));
+        if (landing === "/") armBrandHeroMorph();
+        navigate({ to: landing, viewTransition: true });
       } else {
         toast.success("Konto skapat! Kolla din e-post för att bekräfta adressen.");
         setLoginEmail(signupEmail.trim());

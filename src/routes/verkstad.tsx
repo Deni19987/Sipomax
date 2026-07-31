@@ -8,20 +8,34 @@ import {
   ImpersonationBanner,
   useAccountSwitcher,
 } from "@/components/AccountSwitcher";
-import { AppSplash } from "@/components/app-splash";
 import { SipomaxLogo } from "@/components/SipomaxLogo";
 import { Toaster } from "@/components/ui/sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  cacheAccountType,
+  clearAccountType,
+  readCachedAccountType,
+  resolveAccountType,
+} from "@/lib/account-landing";
 import { DEV_SESSION_KEY } from "@/lib/impersonation-client";
 import { getMyAccountInfo } from "@/lib/shop-orders.functions";
 
 export const Route = createFileRoute("/verkstad")({
   // Ingen SSR — Supabase-sessionen finns bara i webbläsaren.
   ssr: false,
+  // Kundkonton hör hemma i butiken. Precis som "/" tas beslutet före render,
+  // så att verkstadsskalet aldrig hinner ritas för fel konto.
   beforeLoad: async () => {
     const { data } = await supabase.auth.getUser();
     if (!data.user) throw redirect({ to: "/login" });
+    const cached = readCachedAccountType();
+    if (cached === "customer") throw redirect({ to: "/" });
+    if (cached === "workshop") {
+      void resolveAccountType(true); // verifiera i bakgrunden
+      return;
+    }
+    if ((await resolveAccountType()) === "customer") throw redirect({ to: "/" });
   },
   component: WorkshopLayout,
 });
@@ -52,26 +66,23 @@ function WorkshopLayout() {
     enabled: !!user,
   });
 
-  // Kundkonton hör hemma i butiken, inte i verkstadsvyn.
+  // Skyddsnät för kontobyten under sessionen, och facit för landningscachen.
   useEffect(() => {
-    if (accountInfo?.accountType === "customer") {
+    if (!accountInfo) return;
+    cacheAccountType(accountInfo.accountType);
+    if (accountInfo.accountType === "customer") {
       navigate({ to: "/", replace: true });
     }
   }, [accountInfo, navigate]);
 
   async function signOut() {
     localStorage.removeItem(DEV_SESSION_KEY);
+    clearAccountType();
     await supabase.auth.signOut();
     navigate({ to: "/login", viewTransition: false });
   }
 
   const accountLabel = accountInfo?.displayName || user?.email || "";
-
-  // Spegelbilden av spärren i butiken: rita inte verkstadsskalet förrän vi vet
-  // att kontot hör hemma här.
-  if (user && (!accountInfo || accountInfo.accountType === "customer")) {
-    return <AppSplash />;
-  }
 
   return (
     <div className="min-h-screen bg-neutral-100">
