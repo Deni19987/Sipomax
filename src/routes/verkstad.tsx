@@ -144,7 +144,9 @@ function WorkshopLayout() {
               <p className="font-display text-sm font-extrabold italic tracking-[0.14em]">
                 SIPOMAX
               </p>
-              <p className="text-[11px] text-primary-foreground/80">Verkstad · {accountLabel}</p>
+              <p className="truncate text-[11px] text-primary-foreground/80">
+                {accountLabel ? `Verkstad · ${accountLabel}` : "Verkstad"}
+              </p>
             </div>
             <AccountSwitcherDropdown
               switcher={switcher}
@@ -177,7 +179,7 @@ function WorkshopLayout() {
                 <Link
                   key={item.to}
                   to={item.to}
-                  className="flex flex-1 flex-col items-center gap-1 py-2 text-muted-foreground transition-colors"
+                  className="flex min-h-14 flex-1 flex-col items-center justify-center gap-1 text-muted-foreground transition-colors"
                   activeProps={{ className: "text-primary" }}
                   activeOptions={{ exact: item.exact }}
                 >

@@ -233,23 +233,25 @@ function OrderBoard({
   const mentionTotal = all.filter((o) => o.mentionsMe).length;
 
   return (
-    <div className="space-y-3 px-4 pt-4 lg:space-y-4 lg:pt-8">
+    <div className="space-y-3 px-4 pt-3 lg:space-y-4 lg:pt-8">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h1 className="text-lg font-bold text-foreground lg:text-2xl">Beställningar</h1>
+          <h1 className="text-xl font-bold text-foreground lg:text-2xl">Beställningar</h1>
           <p className="text-xs text-muted-foreground lg:text-sm">
             {counts["att-gora"] > 0 ? `${counts["att-gora"]} att göra` : "Inget att göra just nu"}
             {unreadTotal > 0 ? ` · ${unreadTotal} olästa kommentarer` : ""}
           </p>
         </div>
 
-        <label className="flex items-center gap-2 rounded-xl bg-card px-3 py-2 shadow-sm lg:w-96">
+        <label className="flex h-12 items-center gap-2.5 rounded-xl bg-card px-3.5 shadow-sm lg:h-10 lg:w-96">
           <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
           <input
             value={queryDraft}
             onChange={(e) => setQueryDraft(e.target.value)}
             placeholder="Sök order, kund eller produkt…"
-            className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+            autoCorrect="off"
+            autoCapitalize="off"
+            className="w-full bg-transparent text-base text-foreground outline-none placeholder:text-muted-foreground lg:text-sm"
           />
           {queryDraft && (
             <button
@@ -278,8 +280,10 @@ function OrderBoard({
         ))}
       </div>
 
-      {/* Förfiningar: de två mest använda som egna knappar, resten i en meny */}
-      <div className="flex flex-wrap items-center gap-2">
+      {/* Förfiningar: en enda vågrätt remsa på mobil — samma mönster som
+          filterchipsen i en vanlig produktlista. På desktop får de radbrytas
+          och sorteringen lägga sig till höger. */}
+      <div className="-mx-4 flex items-center gap-2 overflow-x-auto px-4 pb-1 lg:mx-0 lg:flex-wrap lg:px-0">
         <ToggleFilter
           icon={MessageSquare}
           label="Olästa"
@@ -348,7 +352,7 @@ function OrderBoard({
           </DropdownMenuCheckboxItem>
         </MenuButton>
 
-        <div className="ml-auto">
+        <div className="lg:ml-auto">
           <MenuButton icon={ArrowUpDown} label={ORDER_SORT_LABELS[filters.sort]} align="end">
             <DropdownMenuRadioGroup
               value={filters.sort}
@@ -446,7 +450,7 @@ function ViewTab({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
+        "flex h-10 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-sm font-medium transition-colors lg:h-8 lg:text-xs",
         active ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground shadow-sm",
       )}
     >
@@ -484,7 +488,7 @@ function ToggleFilter({
       onClick={onClick}
       disabled={count === 0 && !active}
       className={cn(
-        "flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
+        "flex h-10 shrink-0 items-center gap-1.5 rounded-lg px-3.5 text-sm font-medium transition-colors lg:h-8 lg:text-xs",
         active
           ? "bg-primary text-primary-foreground"
           : "bg-card text-muted-foreground shadow-sm hover:text-foreground disabled:opacity-50 disabled:hover:text-muted-foreground",
@@ -524,7 +528,7 @@ function MenuButton({
     <DropdownMenu>
       <DropdownMenuTrigger
         className={cn(
-          "flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
+          "flex h-10 shrink-0 items-center gap-1.5 rounded-lg px-3.5 text-sm font-medium transition-colors lg:h-8 lg:text-xs",
           active
             ? "bg-primary text-primary-foreground"
             : "bg-card text-muted-foreground shadow-sm hover:text-foreground",
@@ -598,7 +602,7 @@ function OrderRow({ order, withBorder }: { order: ShopOrder; withBorder: boolean
       to="/verkstad"
       search={(prev) => ({ ...prev, order: order.id })}
       className={cn(
-        "flex items-center gap-3 p-4 transition-colors hover:bg-accent",
+        "flex items-center gap-3 px-4 py-3.5 transition-colors active:bg-accent lg:hover:bg-accent",
         ROW_GRID,
         withBorder && "border-t border-border",
       )}
@@ -626,12 +630,11 @@ function OrderRow({ order, withBorder }: { order: ShopOrder; withBorder: boolean
           </span>
         </div>
         {/* Sammanfattning på mobil — på desktop bor uppgifterna i egna kolumner. */}
-        <p className="truncate text-xs text-muted-foreground lg:hidden">
-          {order.customerName || order.customerEmail || "Okänd kund"} · {itemCount(order)} art. ·{" "}
-          {formatPrice(order.total)}
+        <p className="truncate text-sm text-card-foreground lg:hidden">
+          {order.customerName || order.customerEmail || "Okänd kund"}
         </p>
-        <p className="text-[11px] text-muted-foreground lg:hidden">
-          {formatRelative(order.createdAt)}
+        <p className="text-xs text-muted-foreground lg:hidden">
+          {itemCount(order)} art. · {formatPrice(order.total)} · {formatRelative(order.createdAt)}
         </p>
       </div>
 
@@ -759,9 +762,9 @@ function OrderDetail({
             type="button"
             aria-label="Till alla beställningar"
             onClick={() => navigate({ to: "/verkstad", search: backSearch })}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-card shadow-sm transition-colors hover:bg-accent"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-card shadow-sm transition-colors active:bg-accent lg:h-9 lg:w-9"
           >
-            <ArrowLeft className="h-4 w-4" />
+            <ArrowLeft className="h-5 w-5 lg:h-4 lg:w-4" />
           </button>
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-lg font-bold text-foreground lg:text-2xl">
@@ -796,13 +799,13 @@ function OrderDetail({
               type="button"
               onClick={() => statusMutation.mutate(next)}
               disabled={statusMutation.isPending}
-              className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-opacity disabled:opacity-50 lg:flex-none"
+              className="flex h-12 flex-1 items-center justify-center gap-1.5 rounded-xl bg-primary px-4 text-base font-semibold text-primary-foreground transition-opacity disabled:opacity-50 lg:h-9 lg:rounded-lg lg:text-sm lg:flex-none"
             >
               {ORDER_STATUS_LABELS[next]}
               <ArrowRight className="h-4 w-4" />
             </button>
           ) : (
-            <span className="flex h-9 flex-1 items-center justify-center rounded-lg bg-emerald-100 px-4 text-sm font-semibold text-emerald-700 lg:flex-none">
+            <span className="flex h-12 flex-1 items-center justify-center rounded-xl bg-emerald-100 px-4 text-base font-semibold text-emerald-700 lg:h-9 lg:rounded-lg lg:text-sm lg:flex-none">
               Klar
             </span>
           )}
@@ -810,9 +813,9 @@ function OrderDetail({
           <DropdownMenu>
             <DropdownMenuTrigger
               aria-label="Fler åtgärder"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-card text-muted-foreground shadow-sm transition-colors hover:bg-accent"
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-card text-muted-foreground shadow-sm transition-colors hover:bg-accent lg:h-9 lg:w-9 lg:rounded-lg"
             >
-              <MoreHorizontal className="h-4 w-4" />
+              <MoreHorizontal className="h-5 w-5 lg:h-4 lg:w-4" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem asChild>
@@ -910,7 +913,7 @@ function OrderTab({ value, children }: { value: string; children: React.ReactNod
   return (
     <TabsTrigger
       value={value}
-      className="rounded-none border-b-2 border-transparent bg-transparent px-3 py-3 text-sm font-medium text-muted-foreground shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"
+      className="min-h-12 rounded-none border-b-2 border-transparent bg-transparent px-3 text-sm font-medium text-muted-foreground shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"
     >
       {children}
     </TabsTrigger>
@@ -1012,7 +1015,7 @@ function PaymentCard({ order }: { order: ShopOrder }) {
             disabled={mutation.isPending}
             onClick={() => mutation.mutate(status)}
             className={cn(
-              "rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50",
+              "h-11 rounded-lg px-3.5 text-sm font-semibold transition-colors disabled:opacity-50 lg:h-8 lg:text-xs",
               order.paymentStatus === status
                 ? PAYMENT_STATUS_BADGE[status]
                 : "bg-muted text-muted-foreground hover:text-foreground",
