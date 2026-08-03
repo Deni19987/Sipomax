@@ -68,10 +68,10 @@ export const Route = createFileRoute("/verkstad/produkter")({
 
 function WorkshopProductsPage() {
   return (
-    <div className="space-y-4 px-4 pt-4">
-      <h1 className="text-lg font-bold text-foreground">Produkter & kampanjer</h1>
+    <div className="space-y-4 px-4 pt-4 lg:pt-8">
+      <h1 className="text-lg font-bold text-foreground lg:text-2xl">Produkter & kampanjer</h1>
       <Tabs defaultValue="produkter">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-2 lg:w-80">
           <TabsTrigger value="produkter">Produkter</TabsTrigger>
           <TabsTrigger value="kampanjer">Kampanjer</TabsTrigger>
         </TabsList>
@@ -144,13 +144,13 @@ function ProductsSection() {
   });
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col space-y-3">
       <p className="text-xs text-muted-foreground">
         Dina egna produkter i butiken. Publicerade produkter syns för kunder — utkast ser bara
         verkstaden.
       </p>
       <Button
-        className="w-full rounded-full"
+        className="w-full rounded-full lg:w-auto lg:self-start lg:px-6"
         onClick={() => {
           setEditing(null);
           setEditorOpen(true);
@@ -164,77 +164,79 @@ function ProductsSection() {
           <p className="text-sm text-muted-foreground">Laddar produkter…</p>
         </div>
       ) : products && products.length > 0 ? (
-        products.map((product) => (
-          <div key={product.id} className="rounded-xl bg-card p-3 shadow-sm">
-            <div className="flex items-center gap-3">
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted">
-                {product.imageUrl ? (
-                  <img
-                    src={product.imageUrl}
-                    alt={product.name}
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <Package className="h-6 w-6 text-muted-foreground" />
-                )}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-card-foreground">
-                  {product.name}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {formatPrice(product.price)}
-                  {product.unit ? ` · ${product.unit}` : ""}
-                </p>
-                <span
-                  className={cn(
-                    "mt-1 inline-block rounded-md px-2 py-0.5 text-[11px] font-medium",
-                    product.status === "published"
-                      ? "bg-emerald-100 text-emerald-700"
-                      : "bg-amber-100 text-amber-700",
+        <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
+          {products.map((product) => (
+            <div key={product.id} className="rounded-xl bg-card p-3 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted">
+                  {product.imageUrl ? (
+                    <img
+                      src={product.imageUrl}
+                      alt={product.name}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <Package className="h-6 w-6 text-muted-foreground" />
                   )}
-                >
-                  {product.status === "published" ? "Publicerad" : "Utkast"}
-                </span>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-card-foreground">
+                    {product.name}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatPrice(product.price)}
+                    {product.unit ? ` · ${product.unit}` : ""}
+                  </p>
+                  <span
+                    className={cn(
+                      "mt-1 inline-block rounded-md px-2 py-0.5 text-[11px] font-medium",
+                      product.status === "published"
+                        ? "bg-emerald-100 text-emerald-700"
+                        : "bg-amber-100 text-amber-700",
+                    )}
+                  >
+                    {product.status === "published" ? "Publicerad" : "Utkast"}
+                  </span>
+                </div>
+                <div className="flex shrink-0 flex-col items-end gap-2">
+                  <button
+                    type="button"
+                    aria-label={`Redigera ${product.name}`}
+                    onClick={() => {
+                      setEditing(product);
+                      setEditorOpen(true);
+                    }}
+                    className="text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Ta bort ${product.name}`}
+                    disabled={deleteMutation.isPending}
+                    onClick={() => {
+                      if (window.confirm(`Ta bort ${product.name}?`)) {
+                        deleteMutation.mutate(product.id);
+                      }
+                    }}
+                    className="text-muted-foreground transition-colors hover:text-destructive disabled:opacity-50"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
-              <div className="flex shrink-0 flex-col items-end gap-2">
-                <button
-                  type="button"
-                  aria-label={`Redigera ${product.name}`}
-                  onClick={() => {
-                    setEditing(product);
-                    setEditorOpen(true);
-                  }}
-                  className="text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  <Pencil className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  aria-label={`Ta bort ${product.name}`}
-                  disabled={deleteMutation.isPending}
-                  onClick={() => {
-                    if (window.confirm(`Ta bort ${product.name}?`)) {
-                      deleteMutation.mutate(product.id);
-                    }
-                  }}
-                  className="text-muted-foreground transition-colors hover:text-destructive disabled:opacity-50"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
+              <Button
+                variant={product.status === "published" ? "outline" : "default"}
+                size="sm"
+                className="mt-2 w-full rounded-full"
+                disabled={toggleMutation.isPending}
+                onClick={() => toggleMutation.mutate(product)}
+              >
+                {product.status === "published" ? "Avpublicera" : "Publicera i butiken"}
+              </Button>
             </div>
-            <Button
-              variant={product.status === "published" ? "outline" : "default"}
-              size="sm"
-              className="mt-2 w-full rounded-full"
-              disabled={toggleMutation.isPending}
-              onClick={() => toggleMutation.mutate(product)}
-            >
-              {product.status === "published" ? "Avpublicera" : "Publicera i butiken"}
-            </Button>
-          </div>
-        ))
+          ))}
+        </div>
       ) : (
         <div className="rounded-xl bg-card p-8 text-center shadow-sm">
           <Tag className="mx-auto h-10 w-10 text-muted-foreground" />
@@ -555,42 +557,44 @@ function CampaignsSection() {
           <p className="text-sm text-muted-foreground">Laddar kampanjer…</p>
         </div>
       ) : (
-        CAMPAIGN_TEMPLATES.map((template) => {
-          const existing = existingFor(template.template);
-          return (
-            <div key={template.template} className="rounded-xl bg-card p-4 shadow-sm">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-bold text-card-foreground">{template.name}</p>
-                  <p className="mt-0.5 flex items-center gap-1 text-[11px] font-medium text-primary">
-                    <MapPin className="h-3 w-3 shrink-0" /> {template.placementLabel}
-                  </p>
+        <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
+          {CAMPAIGN_TEMPLATES.map((template) => {
+            const existing = existingFor(template.template);
+            return (
+              <div key={template.template} className="rounded-xl bg-card p-4 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-card-foreground">{template.name}</p>
+                    <p className="mt-0.5 flex items-center gap-1 text-[11px] font-medium text-primary">
+                      <MapPin className="h-3 w-3 shrink-0" /> {template.placementLabel}
+                    </p>
+                  </div>
+                  <span
+                    className={cn(
+                      "shrink-0 rounded-md px-2 py-0.5 text-[11px] font-medium",
+                      existing?.active
+                        ? "bg-emerald-100 text-emerald-700"
+                        : existing
+                          ? "bg-amber-100 text-amber-700"
+                          : "bg-muted text-muted-foreground",
+                    )}
+                  >
+                    {existing?.active ? "Aktiv" : existing ? "Pausad" : "Ej skapad"}
+                  </span>
                 </div>
-                <span
-                  className={cn(
-                    "shrink-0 rounded-md px-2 py-0.5 text-[11px] font-medium",
-                    existing?.active
-                      ? "bg-emerald-100 text-emerald-700"
-                      : existing
-                        ? "bg-amber-100 text-amber-700"
-                        : "bg-muted text-muted-foreground",
-                  )}
+                <p className="mt-2 text-xs text-muted-foreground">{template.description}</p>
+                <Button
+                  variant={existing ? "outline" : "default"}
+                  size="sm"
+                  className="mt-3 w-full rounded-full"
+                  onClick={() => setEditorTemplate(template)}
                 >
-                  {existing?.active ? "Aktiv" : existing ? "Pausad" : "Ej skapad"}
-                </span>
+                  {existing ? "Redigera kampanj" : "Skapa kampanj"}
+                </Button>
               </div>
-              <p className="mt-2 text-xs text-muted-foreground">{template.description}</p>
-              <Button
-                variant={existing ? "outline" : "default"}
-                size="sm"
-                className="mt-3 w-full rounded-full"
-                onClick={() => setEditorTemplate(template)}
-              >
-                {existing ? "Redigera kampanj" : "Skapa kampanj"}
-              </Button>
-            </div>
-          );
-        })
+            );
+          })}
+        </div>
       )}
 
       {editorTemplate && (

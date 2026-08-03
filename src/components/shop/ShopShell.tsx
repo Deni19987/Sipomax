@@ -12,36 +12,70 @@ import { cn } from "@/lib/utils";
 export function ShopShell({
   children,
   title,
+  subtitle,
   backTo,
+  hideNav,
+  bottomBar,
 }: {
   children: ReactNode;
   /** Om satt visas en kompakt röd header med titel + tillbaka-pil. */
   title?: string;
+  subtitle?: string;
   backTo?: string;
+  /** Kassan döljer bottenmenyn — färre utgångar, färre avhopp. */
+  hideNav?: boolean;
+  /** Klibbig åtgärdsrad längst ned, t.ex. summa + "Till kassan". */
+  bottomBar?: ReactNode;
 }) {
   const navigate = useNavigate();
   return (
     <div className="min-h-screen bg-neutral-100">
       <div className="relative mx-auto flex min-h-screen w-full max-w-md flex-col bg-neutral-100 shadow-xl">
         {title ? (
-          <header className="sticky top-0 z-20 bg-gradient-to-b from-primary to-red-700 px-4 pb-4 pt-[calc(env(safe-area-inset-top)+1rem)] text-primary-foreground">
+          <header className="sticky top-0 z-20 bg-gradient-to-b from-primary to-red-700 px-4 pb-3.5 pt-[calc(env(safe-area-inset-top)+0.85rem)] text-primary-foreground">
             <div className="flex items-center gap-3">
               <button
                 type="button"
                 aria-label="Tillbaka"
-                onClick={() =>
-                  backTo ? navigate({ to: backTo }) : window.history.back()
-                }
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-white/15 transition-colors hover:bg-white/25"
+                onClick={() => (backTo ? navigate({ to: backTo }) : window.history.back())}
+                className="-ml-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-colors active:bg-white/20"
               >
                 <ArrowLeft className="h-5 w-5" />
               </button>
-              <h1 className="text-lg font-bold">{title}</h1>
+              <div className="min-w-0 flex-1">
+                <h1 className="truncate text-lg font-bold leading-tight">{title}</h1>
+                {subtitle && (
+                  <p className="truncate text-xs text-primary-foreground/80">{subtitle}</p>
+                )}
+              </div>
             </div>
           </header>
         ) : null}
-        <main className="flex-1 pb-28">{children}</main>
-        <BottomNav />
+
+        {/* Botteninnehållet får inte skymmas: menyn ~4.5rem, åtgärdsraden ~5rem */}
+        <main
+          className={cn(
+            "flex-1",
+            bottomBar ? (hideNav ? "pb-44" : "pb-52") : hideNav ? "pb-8" : "pb-28",
+          )}
+        >
+          {children}
+        </main>
+
+        {bottomBar && (
+          <div
+            className={cn(
+              "fixed inset-x-0 z-30 mx-auto w-full max-w-md border-t border-border bg-card px-4 pt-3",
+              hideNav
+                ? "bottom-0 pb-[calc(env(safe-area-inset-bottom)+0.75rem)]"
+                : "bottom-[4.25rem] pb-3",
+            )}
+          >
+            {bottomBar}
+          </div>
+        )}
+
+        {!hideNav && <BottomNav />}
         <Toaster />
       </div>
     </div>
@@ -61,19 +95,11 @@ export function SipomaxWordmark({ className }: { className?: string }) {
   );
 }
 
-function NavItem({
-  to,
-  label,
-  icon: Icon,
-}: {
-  to: string;
-  label: string;
-  icon: typeof Home;
-}) {
+function NavItem({ to, label, icon: Icon }: { to: string; label: string; icon: typeof Home }) {
   return (
     <Link
       to={to}
-      className="flex flex-1 flex-col items-center gap-1 py-2 text-muted-foreground transition-colors"
+      className="flex min-h-14 flex-1 flex-col items-center justify-center gap-1 text-muted-foreground transition-colors"
       activeProps={{ className: "text-primary" }}
       activeOptions={{ exact: to === "/" }}
     >

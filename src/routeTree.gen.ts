@@ -14,6 +14,7 @@ import { Route as VarukorgRouteImport } from './routes/varukorg'
 import { Route as ProdukterRouteImport } from './routes/produkter'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as KontoRouteImport } from './routes/konto'
+import { Route as KassaRouteImport } from './routes/kassa'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as VerkstadIndexRouteImport } from './routes/verkstad.index'
@@ -79,6 +80,11 @@ const LoginRoute = LoginRouteImport.update({
 const KontoRoute = KontoRouteImport.update({
   id: '/konto',
   path: '/konto',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const KassaRoute = KassaRouteImport.update({
+  id: '/kassa',
+  path: '/kassa',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedRoute = AuthenticatedRouteImport.update({
@@ -301,6 +307,7 @@ const AuthenticatedJobsIdUpdatesUpdateIdRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/kassa': typeof KassaRoute
   '/konto': typeof KontoRoute
   '/login': typeof LoginRoute
   '/produkter': typeof ProdukterRoute
@@ -348,6 +355,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/kassa': typeof KassaRoute
   '/konto': typeof KontoRoute
   '/login': typeof LoginRoute
   '/produkter': typeof ProdukterRoute
@@ -396,6 +404,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteWithChildren
+  '/kassa': typeof KassaRoute
   '/konto': typeof KontoRoute
   '/login': typeof LoginRoute
   '/produkter': typeof ProdukterRoute
@@ -445,6 +454,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/kassa'
     | '/konto'
     | '/login'
     | '/produkter'
@@ -492,6 +502,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/kassa'
     | '/konto'
     | '/login'
     | '/produkter'
@@ -539,6 +550,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/_authenticated'
+    | '/kassa'
     | '/konto'
     | '/login'
     | '/produkter'
@@ -588,6 +600,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
+  KassaRoute: typeof KassaRoute
   KontoRoute: typeof KontoRoute
   LoginRoute: typeof LoginRoute
   ProdukterRoute: typeof ProdukterRoute
@@ -650,6 +663,13 @@ declare module '@tanstack/react-router' {
       path: '/konto'
       fullPath: '/konto'
       preLoaderRoute: typeof KontoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/kassa': {
+      id: '/kassa'
+      path: '/kassa'
+      fullPath: '/kassa'
+      preLoaderRoute: typeof KassaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated': {
@@ -1022,6 +1042,7 @@ const CTokenRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
+  KassaRoute: KassaRoute,
   KontoRoute: KontoRoute,
   LoginRoute: LoginRoute,
   ProdukterRoute: ProdukterRoute,
