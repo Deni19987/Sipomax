@@ -52,14 +52,10 @@ function decodeJWTEmail(token: string): string | null {
   }
 }
 
-type Phase =
-  | "checking"
-  | "login"
-  | "signup"
-  | "forgot"
-  | "forgot-sent"
-  | "set-password"
-  | "reset-password";
+// Konton skapas aldrig här: verkstaden bjuder in kunder från kundsidan och
+// kunden väljer sitt lösenord via inbjudningsmejlet ("set-password"). Därför
+// finns varken självregistrering eller inloggning via Google/Apple.
+type Phase = "checking" | "login" | "forgot" | "forgot-sent" | "set-password" | "reset-password";
 
 function LoginPage() {
   useScrollTopOnMount();
@@ -81,12 +77,6 @@ function LoginPage() {
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
-
-  // Sign-up form
-  const [signupEmail, setSignupEmail] = useState("");
-  const [signupPassword, setSignupPassword] = useState("");
-  const [signupConfirm, setSignupConfirm] = useState("");
-  const [signupError, setSignupError] = useState<string | null>(null);
 
   // PASSWORD_RECOVERY fires when Supabase exchanges the ?code= param from the
   // reset email (PKCE flow). We must handle it here before init() can navigate.
@@ -237,62 +227,6 @@ function LoginPage() {
     }
   }
 
-  async function handleOAuth(provider: "google" | "apple") {
-    // Remember to morph the brand hero once we land back on the home page.
-    armBrandHeroMorph();
-    setLoading(true);
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider,
-        options: { redirectTo: `${window.location.origin}/` },
-      });
-      // On success the browser redirects to the provider; nothing more runs here.
-      if (error) throw error;
-    } catch (err: unknown) {
-      const name = provider === "google" ? "Google" : "Apple";
-      toast.error(
-        err instanceof Error ? err.message : `Kunde inte logga in med ${name} just nu.`,
-      );
-      setLoading(false);
-    }
-  }
-
-  async function handleSignup(e: React.FormEvent) {
-    e.preventDefault();
-    setSignupError(null);
-    if (signupPassword !== signupConfirm) {
-      setSignupError("Lösenorden matchar inte.");
-      return;
-    }
-    if (signupPassword.length < 8) {
-      setSignupError("Lösenordet måste vara minst 8 tecken.");
-      return;
-    }
-    setLoading(true);
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email: signupEmail.trim(),
-        password: signupPassword,
-        options: { emailRedirectTo: `${window.location.origin}/login` },
-      });
-      if (error) throw error;
-      if (data.session) {
-        // Email confirmation disabled → the user is signed in immediately.
-        const landing = landingPathFor(await resolveAccountType(true));
-        if (landing === "/") armBrandHeroMorph();
-        navigate({ to: landing, viewTransition: true });
-      } else {
-        toast.success("Konto skapat! Kolla din e-post för att bekräfta adressen.");
-        setLoginEmail(signupEmail.trim());
-        setPhase("login");
-      }
-    } catch (err: unknown) {
-      setSignupError(err instanceof Error ? err.message : "Kunde inte skapa konto");
-    } finally {
-      setLoading(false);
-    }
-  }
-
   async function handleForgot(e: React.FormEvent) {
     e.preventDefault();
 
@@ -362,15 +296,14 @@ function LoginPage() {
     }
   }
 
-  // ------- Branded screens: sign in + sign up share the red hero -------------
-  if (phase === "login" || phase === "signup") {
+  // ------- Branded sign-in screen -------------------------------------------
+  if (phase === "login") {
     return (
       <div className="min-h-screen bg-neutral-100">
        <div className="relative mx-auto flex min-h-screen w-full max-w-md flex-col bg-background shadow-xl">
         <BrandHero />
 
-        {phase === "login" ? (
-          <div className="flex flex-1 flex-col px-6 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-1">
+        <div className="flex flex-1 flex-col px-6 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-1">
             <h1 className="text-2xl font-bold tracking-tight text-foreground">
               Välkommen tillbaka!
             </h1>
@@ -431,105 +364,10 @@ function LoginPage() {
               <PrimaryButton loading={loading}>Logga in</PrimaryButton>
             </form>
 
-            <Divider>eller fortsätt med</Divider>
-
-            <OAuthButtons onOAuth={handleOAuth} loading={loading} />
-
             <p className="mt-6 text-center text-sm text-muted-foreground">
-              Har du inget konto?{" "}
-              <button
-                type="button"
-                onClick={() => { setSignupError(null); setPhase("signup"); }}
-                className="font-bold text-primary hover:underline"
-              >
-                Skapa konto
-              </button>
+              Inget konto än? Kontakta Sipomax så skickar vi en inbjudan till din e-post.
             </p>
           </div>
-        ) : (
-          <div className="flex flex-1 flex-col px-6 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-1">
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">Skapa konto</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Registrera dig för att beställa och följa dina ordrar.
-            </p>
-
-            <form onSubmit={handleSignup} className="mt-6 space-y-3">
-              <Field
-                icon={<Mail className="h-5 w-5 text-muted-foreground" />}
-                invalid={!!signupError}
-              >
-                <input
-                  type="email"
-                  required
-                  autoComplete="email"
-                  placeholder="E-postadress"
-                  value={signupEmail}
-                  onChange={(e) => { setSignupEmail(e.target.value); setSignupError(null); }}
-                  className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
-                />
-              </Field>
-
-              <Field
-                icon={<Lock className="h-5 w-5 text-muted-foreground" />}
-                invalid={!!signupError}
-              >
-                <input
-                  type={showPassword ? "text" : "password"}
-                  required
-                  minLength={8}
-                  autoComplete="new-password"
-                  placeholder="Lösenord (minst 8 tecken)"
-                  value={signupPassword}
-                  onChange={(e) => { setSignupPassword(e.target.value); setSignupError(null); }}
-                  className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((v) => !v)}
-                  aria-label={showPassword ? "Dölj lösenord" : "Visa lösenord"}
-                  className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                </button>
-              </Field>
-
-              <Field
-                icon={<Lock className="h-5 w-5 text-muted-foreground" />}
-                invalid={!!signupError}
-              >
-                <input
-                  type={showPassword ? "text" : "password"}
-                  required
-                  minLength={8}
-                  autoComplete="new-password"
-                  placeholder="Bekräfta lösenord"
-                  value={signupConfirm}
-                  onChange={(e) => { setSignupConfirm(e.target.value); setSignupError(null); }}
-                  className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
-                />
-              </Field>
-
-              {signupError && <p className="text-sm text-destructive">{signupError}</p>}
-
-              <PrimaryButton loading={loading}>Skapa konto</PrimaryButton>
-            </form>
-
-            <Divider>eller registrera med</Divider>
-
-            <OAuthButtons onOAuth={handleOAuth} loading={loading} />
-
-            <p className="mt-6 text-center text-sm text-muted-foreground">
-              Har du redan ett konto?{" "}
-              <button
-                type="button"
-                onClick={() => { setLoginError(null); setPhase("login"); }}
-                className="font-bold text-primary hover:underline"
-              >
-                Logga in
-              </button>
-            </p>
-          </div>
-        )}
        </div>
       </div>
     );
@@ -735,67 +573,5 @@ function PrimaryButton({
       {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : null}
       {children}
     </button>
-  );
-}
-
-function Divider({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="my-5 flex items-center gap-3">
-      <span className="h-px flex-1 bg-border" />
-      <span className="whitespace-nowrap text-xs text-muted-foreground">{children}</span>
-      <span className="h-px flex-1 bg-border" />
-    </div>
-  );
-}
-
-function OAuthButtons({
-  onOAuth,
-  loading,
-}: {
-  onOAuth: (provider: "google" | "apple") => void;
-  loading?: boolean;
-}) {
-  const base =
-    "flex w-full items-center justify-center gap-3 rounded-2xl border border-border bg-card py-3.5 text-sm font-semibold text-foreground transition active:scale-[0.99] disabled:opacity-70";
-  return (
-    <div className="space-y-3">
-      <button type="button" onClick={() => onOAuth("google")} disabled={loading} className={base}>
-        <GoogleIcon className="h-5 w-5" /> Fortsätt med Google
-      </button>
-      <button type="button" onClick={() => onOAuth("apple")} disabled={loading} className={base}>
-        <AppleIcon className="h-5 w-5" /> Fortsätt med Apple
-      </button>
-    </div>
-  );
-}
-
-function AppleIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden xmlns="http://www.w3.org/2000/svg">
-      <path d="M17.05 12.54c-.02-2.02 1.65-2.99 1.73-3.04-.94-1.38-2.41-1.57-2.93-1.59-1.25-.13-2.44.73-3.07.73-.63 0-1.61-.71-2.65-.69-1.36.02-2.62.79-3.32 2.01-1.42 2.46-.36 6.1 1.02 8.09.67.98 1.47 2.08 2.52 2.04 1.01-.04 1.39-.65 2.61-.65 1.22 0 1.56.65 2.63.63 1.09-.02 1.78-1 2.45-1.98.77-1.13 1.09-2.22 1.11-2.28-.02-.01-2.13-.82-2.15-3.25ZM15.03 6.4c.56-.68.94-1.62.83-2.56-.81.03-1.79.54-2.37 1.22-.52.6-.97 1.56-.85 2.48.9.07 1.83-.46 2.39-1.14Z" />
-    </svg>
-  );
-}
-
-function GoogleIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" aria-hidden xmlns="http://www.w3.org/2000/svg">
-      <path
-        fill="#4285F4"
-        d="M23.52 12.27c0-.79-.07-1.54-.2-2.27H12v4.51h6.47a5.53 5.53 0 0 1-2.4 3.63v3h3.88c2.27-2.09 3.57-5.17 3.57-8.87Z"
-      />
-      <path
-        fill="#34A853"
-        d="M12 24c3.24 0 5.96-1.08 7.95-2.91l-3.88-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96H1.29v3.09A12 12 0 0 0 12 24Z"
-      />
-      <path
-        fill="#FBBC05"
-        d="M5.27 14.29a7.2 7.2 0 0 1 0-4.58V6.62H1.29a12 12 0 0 0 0 10.76l3.98-3.09Z"
-      />
-      <path
-        fill="#EA4335"
-        d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.44-3.44C17.95 1.19 15.23 0 12 0A12 12 0 0 0 1.29 6.62l3.98 3.09C6.22 6.86 8.87 4.75 12 4.75Z"
-      />
-    </svg>
   );
 }

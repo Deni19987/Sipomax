@@ -21,6 +21,7 @@ import { Route as VerkstadIndexRouteImport } from './routes/verkstad.index'
 import { Route as BestallningarIndexRouteImport } from './routes/bestallningar.index'
 import { Route as VerkstadStatistikRouteImport } from './routes/verkstad.statistik'
 import { Route as VerkstadProdukterRouteImport } from './routes/verkstad.produkter'
+import { Route as VerkstadKunderRouteImport } from './routes/verkstad.kunder'
 import { Route as VerkstadInstallningarRouteImport } from './routes/verkstad.installningar'
 import { Route as VerkstadChattRouteImport } from './routes/verkstad.chatt'
 import { Route as ProduktIdRouteImport } from './routes/produkt.$id'
@@ -41,6 +42,7 @@ import { Route as AuthenticatedDashboardRouteImport } from './routes/_authentica
 import { Route as AuthenticatedCustomersRouteImport } from './routes/_authenticated/customers'
 import { Route as AuthenticatedCampaignsRouteImport } from './routes/_authenticated/campaigns'
 import { Route as AuthenticatedArchivedRouteImport } from './routes/_authenticated/archived'
+import { Route as VerkstadKundIdRouteImport } from './routes/verkstad.kund.$id'
 import { Route as ScandicBookTokenRouteImport } from './routes/scandic.book.$token'
 import { Route as ApiPublicInvoicePdfRouteImport } from './routes/api/public/invoice-pdf'
 import { Route as ApiPublicClientLogRouteImport } from './routes/api/public/client-log'
@@ -114,6 +116,11 @@ const VerkstadStatistikRoute = VerkstadStatistikRouteImport.update({
 const VerkstadProdukterRoute = VerkstadProdukterRouteImport.update({
   id: '/produkter',
   path: '/produkter',
+  getParentRoute: () => VerkstadRoute,
+} as any)
+const VerkstadKunderRoute = VerkstadKunderRouteImport.update({
+  id: '/kunder',
+  path: '/kunder',
   getParentRoute: () => VerkstadRoute,
 } as any)
 const VerkstadInstallningarRoute = VerkstadInstallningarRouteImport.update({
@@ -219,6 +226,11 @@ const AuthenticatedArchivedRoute = AuthenticatedArchivedRouteImport.update({
   id: '/archived',
   path: '/archived',
   getParentRoute: () => AuthenticatedRoute,
+} as any)
+const VerkstadKundIdRoute = VerkstadKundIdRouteImport.update({
+  id: '/kund/$id',
+  path: '/kund/$id',
+  getParentRoute: () => VerkstadRoute,
 } as any)
 const ScandicBookTokenRoute = ScandicBookTokenRouteImport.update({
   id: '/scandic/book/$token',
@@ -333,6 +345,7 @@ export interface FileRoutesByFullPath {
   '/produkt/$id': typeof ProduktIdRoute
   '/verkstad/chatt': typeof VerkstadChattRoute
   '/verkstad/installningar': typeof VerkstadInstallningarRoute
+  '/verkstad/kunder': typeof VerkstadKunderRoute
   '/verkstad/produkter': typeof VerkstadProdukterRoute
   '/verkstad/statistik': typeof VerkstadStatistikRoute
   '/bestallningar/': typeof BestallningarIndexRoute
@@ -341,6 +354,7 @@ export interface FileRoutesByFullPath {
   '/api/public/client-log': typeof ApiPublicClientLogRoute
   '/api/public/invoice-pdf': typeof ApiPublicInvoicePdfRoute
   '/scandic/book/$token': typeof ScandicBookTokenRoute
+  '/verkstad/kund/$id': typeof VerkstadKundIdRoute
   '/jobs/$id/invoice': typeof AuthenticatedJobsIdInvoiceRoute
   '/api/public/fortnox/callback': typeof ApiPublicFortnoxCallbackRoute
   '/api/public/hooks/chat-reminders': typeof ApiPublicHooksChatRemindersRoute
@@ -380,6 +394,7 @@ export interface FileRoutesByTo {
   '/produkt/$id': typeof ProduktIdRoute
   '/verkstad/chatt': typeof VerkstadChattRoute
   '/verkstad/installningar': typeof VerkstadInstallningarRoute
+  '/verkstad/kunder': typeof VerkstadKunderRoute
   '/verkstad/produkter': typeof VerkstadProdukterRoute
   '/verkstad/statistik': typeof VerkstadStatistikRoute
   '/bestallningar': typeof BestallningarIndexRoute
@@ -388,6 +403,7 @@ export interface FileRoutesByTo {
   '/api/public/client-log': typeof ApiPublicClientLogRoute
   '/api/public/invoice-pdf': typeof ApiPublicInvoicePdfRoute
   '/scandic/book/$token': typeof ScandicBookTokenRoute
+  '/verkstad/kund/$id': typeof VerkstadKundIdRoute
   '/jobs/$id/invoice': typeof AuthenticatedJobsIdInvoiceRoute
   '/api/public/fortnox/callback': typeof ApiPublicFortnoxCallbackRoute
   '/api/public/hooks/chat-reminders': typeof ApiPublicHooksChatRemindersRoute
@@ -430,6 +446,7 @@ export interface FileRoutesById {
   '/produkt/$id': typeof ProduktIdRoute
   '/verkstad/chatt': typeof VerkstadChattRoute
   '/verkstad/installningar': typeof VerkstadInstallningarRoute
+  '/verkstad/kunder': typeof VerkstadKunderRoute
   '/verkstad/produkter': typeof VerkstadProdukterRoute
   '/verkstad/statistik': typeof VerkstadStatistikRoute
   '/bestallningar/': typeof BestallningarIndexRoute
@@ -438,6 +455,7 @@ export interface FileRoutesById {
   '/api/public/client-log': typeof ApiPublicClientLogRoute
   '/api/public/invoice-pdf': typeof ApiPublicInvoicePdfRoute
   '/scandic/book/$token': typeof ScandicBookTokenRoute
+  '/verkstad/kund/$id': typeof VerkstadKundIdRoute
   '/_authenticated/jobs/$id/invoice': typeof AuthenticatedJobsIdInvoiceRoute
   '/api/public/fortnox/callback': typeof ApiPublicFortnoxCallbackRoute
   '/api/public/hooks/chat-reminders': typeof ApiPublicHooksChatRemindersRoute
@@ -480,6 +498,7 @@ export interface FileRouteTypes {
     | '/produkt/$id'
     | '/verkstad/chatt'
     | '/verkstad/installningar'
+    | '/verkstad/kunder'
     | '/verkstad/produkter'
     | '/verkstad/statistik'
     | '/bestallningar/'
@@ -488,6 +507,7 @@ export interface FileRouteTypes {
     | '/api/public/client-log'
     | '/api/public/invoice-pdf'
     | '/scandic/book/$token'
+    | '/verkstad/kund/$id'
     | '/jobs/$id/invoice'
     | '/api/public/fortnox/callback'
     | '/api/public/hooks/chat-reminders'
@@ -527,6 +547,7 @@ export interface FileRouteTypes {
     | '/produkt/$id'
     | '/verkstad/chatt'
     | '/verkstad/installningar'
+    | '/verkstad/kunder'
     | '/verkstad/produkter'
     | '/verkstad/statistik'
     | '/bestallningar'
@@ -535,6 +556,7 @@ export interface FileRouteTypes {
     | '/api/public/client-log'
     | '/api/public/invoice-pdf'
     | '/scandic/book/$token'
+    | '/verkstad/kund/$id'
     | '/jobs/$id/invoice'
     | '/api/public/fortnox/callback'
     | '/api/public/hooks/chat-reminders'
@@ -576,6 +598,7 @@ export interface FileRouteTypes {
     | '/produkt/$id'
     | '/verkstad/chatt'
     | '/verkstad/installningar'
+    | '/verkstad/kunder'
     | '/verkstad/produkter'
     | '/verkstad/statistik'
     | '/bestallningar/'
@@ -584,6 +607,7 @@ export interface FileRouteTypes {
     | '/api/public/client-log'
     | '/api/public/invoice-pdf'
     | '/scandic/book/$token'
+    | '/verkstad/kund/$id'
     | '/_authenticated/jobs/$id/invoice'
     | '/api/public/fortnox/callback'
     | '/api/public/hooks/chat-reminders'
@@ -712,6 +736,13 @@ declare module '@tanstack/react-router' {
       path: '/produkter'
       fullPath: '/verkstad/produkter'
       preLoaderRoute: typeof VerkstadProdukterRouteImport
+      parentRoute: typeof VerkstadRoute
+    }
+    '/verkstad/kunder': {
+      id: '/verkstad/kunder'
+      path: '/kunder'
+      fullPath: '/verkstad/kunder'
+      preLoaderRoute: typeof VerkstadKunderRouteImport
       parentRoute: typeof VerkstadRoute
     }
     '/verkstad/installningar': {
@@ -853,6 +884,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/archived'
       preLoaderRoute: typeof AuthenticatedArchivedRouteImport
       parentRoute: typeof AuthenticatedRoute
+    }
+    '/verkstad/kund/$id': {
+      id: '/verkstad/kund/$id'
+      path: '/kund/$id'
+      fullPath: '/verkstad/kund/$id'
+      preLoaderRoute: typeof VerkstadKundIdRouteImport
+      parentRoute: typeof VerkstadRoute
     }
     '/scandic/book/$token': {
       id: '/scandic/book/$token'
@@ -1011,17 +1049,21 @@ const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
 interface VerkstadRouteChildren {
   VerkstadChattRoute: typeof VerkstadChattRoute
   VerkstadInstallningarRoute: typeof VerkstadInstallningarRoute
+  VerkstadKunderRoute: typeof VerkstadKunderRoute
   VerkstadProdukterRoute: typeof VerkstadProdukterRoute
   VerkstadStatistikRoute: typeof VerkstadStatistikRoute
   VerkstadIndexRoute: typeof VerkstadIndexRoute
+  VerkstadKundIdRoute: typeof VerkstadKundIdRoute
 }
 
 const VerkstadRouteChildren: VerkstadRouteChildren = {
   VerkstadChattRoute: VerkstadChattRoute,
   VerkstadInstallningarRoute: VerkstadInstallningarRoute,
+  VerkstadKunderRoute: VerkstadKunderRoute,
   VerkstadProdukterRoute: VerkstadProdukterRoute,
   VerkstadStatistikRoute: VerkstadStatistikRoute,
   VerkstadIndexRoute: VerkstadIndexRoute,
+  VerkstadKundIdRoute: VerkstadKundIdRoute,
 }
 
 const VerkstadRouteWithChildren = VerkstadRoute._addFileChildren(

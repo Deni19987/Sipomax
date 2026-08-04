@@ -10,32 +10,26 @@
 //     enda Filter-meny så att grundvyn förblir lugn.
 
 import type { ShopOrder, ShopOrderStatus } from "./orders";
-import { ORDER_STATUSES, ORDER_STATUS_LABELS } from "./orders";
+import { ORDER_STATUSES, ORDER_STATUS_HINTS, ORDER_STATUS_LABELS, hasAddress } from "./orders";
 
 // ── Vyer (flikarna) ─────────────────────────────────────────────────────────
 
-export type OrderView = "alla" | "att-gora" | ShopOrderStatus;
+export type OrderView = "alla" | ShopOrderStatus;
 
-export const ORDER_VIEWS: OrderView[] = ["alla", "att-gora", ...ORDER_STATUSES];
+export const ORDER_VIEWS: OrderView[] = ["alla", ...ORDER_STATUSES];
 
 export const ORDER_VIEW_LABELS: Record<OrderView, string> = {
   alla: "Alla",
-  "att-gora": "Att göra",
   ...ORDER_STATUS_LABELS,
 };
 
 export const ORDER_VIEW_HINTS: Record<OrderView, string> = {
-  alla: "Alla beställningar i verkstaden",
-  "att-gora": "Allt som ännu inte är skickat eller levererat",
-  mottagen: "Nya beställningar som ingen börjat med",
-  behandlas: "Plockas eller förbereds i verkstaden",
-  skickad: "Skickad eller redo för upphämtning",
-  levererad: "Avslutad och levererad till kund",
+  alla: "Alla öppna beställningar i verkstaden",
+  ...ORDER_STATUS_HINTS,
 };
 
 function matchesView(order: ShopOrder, view: OrderView): boolean {
   if (view === "alla") return true;
-  if (view === "att-gora") return order.status === "mottagen" || order.status === "behandlas";
   return order.status === view;
 }
 
@@ -79,6 +73,29 @@ function matchesAmount(order: ShopOrder, amount: OrderAmount): boolean {
   return amount === "alla" || order.total >= Number(amount);
 }
 
+// ── Antal artiklar ──────────────────────────────────────────────────────────
+
+export type OrderSize = "alla" | "1" | "5" | "20";
+
+export const ORDER_SIZES: OrderSize[] = ["alla", "1", "5", "20"];
+
+export const ORDER_SIZE_LABELS: Record<OrderSize, string> = {
+  alla: "Alla storlekar",
+  "1": "Endast en artikel",
+  "5": "Minst 5 artiklar",
+  "20": "Minst 20 artiklar",
+};
+
+function itemCount(order: ShopOrder): number {
+  return order.lines.reduce((sum, line) => sum + line.quantity, 0);
+}
+
+function matchesSize(order: ShopOrder, size: OrderSize): boolean {
+  if (size === "alla") return true;
+  const count = itemCount(order);
+  return size === "1" ? count === 1 : count >= Number(size);
+}
+
 // ── Sortering ───────────────────────────────────────────────────────────────
 
 export type OrderSort = "nyast" | "aldst" | "varde" | "uppdaterad";
@@ -99,6 +116,8 @@ export type OrderFilters = {
   query: string;
   period: OrderPeriod;
   amount: OrderAmount;
+  /** Antal artiklar på ordern. */
+  size: OrderSize;
   /** Bara ordrar med olästa kommentarer. */
   unread: boolean;
   /** Bara ordrar där jag själv blivit taggad. */
@@ -107,6 +126,10 @@ export type OrderFilters = {
   commented: boolean;
   /** Bara ordrar med en intern anteckning. */
   noted: boolean;
+  /** Bara ordrar utan komplett leveransadress. */
+  missingAddress: boolean;
+  /** Bara ordrar utan kollinummer. */
+  missingTracking: boolean;
   sort: OrderSort;
 };
 
@@ -115,10 +138,13 @@ export const DEFAULT_FILTERS: OrderFilters = {
   query: "",
   period: "alla",
   amount: "alla",
+  size: "alla",
   unread: false,
   mentioned: false,
   commented: false,
   noted: false,
+  missingAddress: false,
+  missingTracking: false,
   sort: "nyast",
 };
 
@@ -151,10 +177,13 @@ export function matchesRefinements(
   if (!matchesQuery(order, filters.query)) return false;
   if (!matchesPeriod(order, filters.period, now)) return false;
   if (!matchesAmount(order, filters.amount)) return false;
+  if (!matchesSize(order, filters.size)) return false;
   if (filters.unread && (order.unreadCount ?? 0) === 0) return false;
   if (filters.mentioned && !order.mentionsMe) return false;
   if (filters.commented && (order.messageCount ?? 0) === 0) return false;
   if (filters.noted && !order.internalNote?.trim()) return false;
+  if (filters.missingAddress && hasAddress(order.shipping)) return false;
+  if (filters.missingTracking && !!order.trackingNumber?.trim()) return false;
   return true;
 }
 
@@ -219,10 +248,15 @@ export function activeFilterChips(filters: OrderFilters): FilterChipInfo[] {
   if (filters.amount !== "alla") {
     chips.push({ key: "amount", label: ORDER_AMOUNT_LABELS[filters.amount] });
   }
+  if (filters.size !== "alla") {
+    chips.push({ key: "size", label: ORDER_SIZE_LABELS[filters.size] });
+  }
   if (filters.unread) chips.push({ key: "unread", label: "Olästa kommentarer" });
   if (filters.mentioned) chips.push({ key: "mentioned", label: "Jag är taggad" });
   if (filters.commented) chips.push({ key: "commented", label: "Har kommentarer" });
   if (filters.noted) chips.push({ key: "noted", label: "Har intern anteckning" });
+  if (filters.missingAddress) chips.push({ key: "missingAddress", label: "Saknar leveransadress" });
+  if (filters.missingTracking) chips.push({ key: "missingTracking", label: "Saknar kollinummer" });
   if (filters.query.trim()) chips.push({ key: "query", label: `”${filters.query.trim()}”` });
   return chips;
 }

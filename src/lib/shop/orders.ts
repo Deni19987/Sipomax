@@ -1,11 +1,13 @@
 // Delade ordertyper för butiken (kundvyn) och verkstadsvyn.
 // Själva datat bor i backend-tabellerna shop_orders / shop_order_lines.
 
-export type ShopOrderStatus = "mottagen" | "behandlas" | "skickad" | "levererad";
+// "Packad" är steget mellan mottagen och skickad: ordern är plockad, packad
+// och står redo att lämna verkstaden.
+export type ShopOrderStatus = "mottagen" | "packad" | "skickad" | "levererad";
 
 export const ORDER_STATUS_LABELS: Record<ShopOrderStatus, string> = {
   mottagen: "Mottagen",
-  behandlas: "Behandlas",
+  packad: "Packad",
   skickad: "Skickad",
   levererad: "Levererad",
 };
@@ -15,22 +17,22 @@ export const ORDER_STATUSES = Object.keys(ORDER_STATUS_LABELS) as ShopOrderStatu
 // Kort beskrivning av vad varje steg i flödet innebär — visas i orderöversikten.
 export const ORDER_STATUS_HINTS: Record<ShopOrderStatus, string> = {
   mottagen: "Nya beställningar som ingen börjat med",
-  behandlas: "Plockas eller förbereds i verkstaden",
+  packad: "Packad och redo att skickas",
   skickad: "Skickad eller redo för upphämtning",
-  levererad: "Avslutad och levererad till kund",
+  levererad: "Levererad till kund, väntar på betalning",
 };
 
 // Tailwind-klasser per status. Används för både chips och badges.
 export const ORDER_STATUS_BADGE: Record<ShopOrderStatus, string> = {
   mottagen: "bg-amber-100 text-amber-700",
-  behandlas: "bg-sky-100 text-sky-700",
+  packad: "bg-sky-100 text-sky-700",
   skickad: "bg-violet-100 text-violet-700",
   levererad: "bg-emerald-100 text-emerald-700",
 };
 
 export const ORDER_STATUS_DOT: Record<ShopOrderStatus, string> = {
   mottagen: "bg-amber-500",
-  behandlas: "bg-sky-500",
+  packad: "bg-sky-500",
   skickad: "bg-violet-500",
   levererad: "bg-emerald-500",
 };
@@ -109,6 +111,16 @@ export const PAYMENT_STATUS_BADGE: Record<PaymentStatus, string> = {
   fakturerad: "bg-sky-100 text-sky-700",
   aterbetald: "bg-neutral-200 text-neutral-700",
 };
+
+/**
+ * En order är helt färdig först när den både är levererad och betald. Då
+ * lämnar den verkstadens orderlista och lever vidare som historik på
+ * kundkortet. En levererad men obetald order ligger kvar i listan — det finns
+ * fortfarande något att göra med den.
+ */
+export function isCompletedOrder(order: Pick<ShopOrder, "status" | "paymentStatus">): boolean {
+  return order.status === "levererad" && order.paymentStatus === "betald";
+}
 
 // ── Frakt ───────────────────────────────────────────────────────────────────
 
@@ -201,6 +213,8 @@ export interface ShopOrder {
   total: number;
   lines: ShopOrderLine[];
   // Kundinfo — fylls i för verkstadsvyn.
+  /** Kundens konto-id, länken till kundkortet. */
+  customerUserId: string | null;
   customerEmail: string | null;
   customerName: string | null;
   customerPhone: string | null;
