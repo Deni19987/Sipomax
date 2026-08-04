@@ -16,11 +16,11 @@ with o(n,cname,slug,status,days,hrs,note) as (values
 (3,'Rekond Syd AB','rekondsyd','mottagen',1,11,null),
 (4,'Bilglans i Väst','bilglans','mottagen',1,8,null),
 (5,'Motorstaden Service','motorstaden','mottagen',2,5,null),
-(6,'Hedisson Bilvård','hedisson','behandlas',1,2,'Saknar 2 st i lager, restnoteras'),
-(7,'Autospa Uppsala','autospa','behandlas',2,19,null),
-(8,'Däckproffsen AB','dackproffsen','behandlas',3,16,null),
-(9,'Lackmästarna','lackmastarna','behandlas',4,13,'Kund vill hämta själv på lagret'),
-(10,'Bilvårdshuset Malmö','bilvardshuset','behandlas',5,10,null),
+(6,'Hedisson Bilvård','hedisson','packad',1,2,'Saknar 2 st i lager, restnoteras'),
+(7,'Autospa Uppsala','autospa','packad',2,19,null),
+(8,'Däckproffsen AB','dackproffsen','packad',3,16,null),
+(9,'Lackmästarna','lackmastarna','packad',4,13,'Kund vill hämta själv på lagret'),
+(10,'Bilvårdshuset Malmö','bilvardshuset','packad',5,10,null),
 (11,'Skinnvård Stockholm','skinnvard','skickad',6,7,null),
 (12,'Fordonstvätt Öst','fordonstvatt','skickad',8,4,null),
 (13,'Prestige Rekond','prestige','skickad',11,1,'Expressleverans, betald frakt'),
@@ -97,7 +97,7 @@ insert into public.shop_order_events (order_id, workshop_id, actor_id, actor_nam
 select o.id, o.workshop_id, '18a19c84-b2f0-4059-89d5-bd96127d0321', 'ferchichideni', 'status_changed',
        f.flow[s], f.flow[s+1], o.created_at + (s*6||' hours')::interval
 from public.shop_orders o
-cross join lateral (select array['mottagen','behandlas','skickad','levererad'] as flow) f
+cross join lateral (select array['mottagen','packad','skickad','levererad'] as flow) f
 cross join lateral generate_series(1, array_position(f.flow, o.status)-1) as s
 where o.id::text like '11111111-0000-4000-8000-%';
 

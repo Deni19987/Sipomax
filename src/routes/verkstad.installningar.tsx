@@ -1,7 +1,15 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Building2, Loader2, Trash2, UserPlus, UsersRound } from "lucide-react";
+import {
+  BarChart3,
+  Building2,
+  ChevronRight,
+  Loader2,
+  Trash2,
+  UserPlus,
+  UsersRound,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -29,6 +37,20 @@ function WorkshopSettingsPage() {
   return (
     <div className="space-y-4 px-4 pt-4 lg:pt-8">
       <h1 className="text-lg font-bold text-foreground lg:text-2xl">Inställningar</h1>
+
+      {/* Statistiken har ingen egen plats i mobilens bottennavigering. */}
+      <Link
+        to="/verkstad/statistik"
+        className="flex items-center gap-3 rounded-xl bg-card p-4 shadow-sm transition-colors active:bg-accent lg:hidden"
+      >
+        <BarChart3 className="h-5 w-5 shrink-0 text-primary" />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-bold text-card-foreground">Statistik</p>
+          <p className="text-xs text-muted-foreground">Omsättning, ordrar och toppsäljare</p>
+        </div>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+      </Link>
+
       <div className="space-y-4 lg:grid lg:grid-cols-2 lg:items-start lg:gap-4 lg:space-y-0">
         <WorkshopProfileCard />
         <TeamCard isDeveloper={accountInfo?.isDeveloper ?? false} />

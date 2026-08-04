@@ -76,6 +76,7 @@ function rowToOrder(row: OrderRow): ShopOrder {
     updatedAt: row.updated_at ?? row.created_at,
     status: row.status,
     total: Number(row.total),
+    customerUserId: row.customer_user_id,
     customerEmail: row.customer_email,
     customerName: row.customer_name,
     customerPhone: row.customer_phone,
@@ -465,12 +466,21 @@ export async function getOrderForCustomer(userId: string, orderId: string): Prom
 
 // ── Verkstad: orderlista, status, statistik ─────────────────────────────────
 
+/**
+ * Verkstadens orderlista visar bara öppna ordrar. En levererad och betald
+ * order är färdigbehandlad: den lämnar listan och lever vidare som historik
+ * på kundkortet. Levererade men obetalda ordrar ligger kvar — det finns
+ * fortfarande något att göra med dem.
+ */
+const OPEN_ORDERS_FILTER = "status.neq.levererad,payment_status.neq.betald";
+
 export async function listWorkshopOrders(userId: string): Promise<ShopOrder[]> {
   const workshopId = await assertWorkshopAccount(userId);
   const { data, error } = await admin
     .from("shop_orders")
     .select(ORDER_SELECT)
     .eq("workshop_id", workshopId)
+    .or(OPEN_ORDERS_FILTER)
     .order("created_at", { ascending: false })
     .limit(300);
   if (error) throw new Error(error.message);
@@ -500,12 +510,14 @@ export async function getWorkshopOrder(userId: string, orderId: string): Promise
 export async function listOrderRefs(userId: string, query: string): Promise<OrderRef[]> {
   const workshopId = await assertWorkshopAccount(userId);
   const term = query.trim();
+  // Färdiga ordrar (levererade och betalda) går inte att tagga — de har lämnat
+  // orderlistan. Vi hämtar därför lite fler rader och filtrerar bort dem här.
   let request = admin
     .from("shop_orders")
-    .select("id, order_number, customer_name, customer_email, status")
+    .select("id, order_number, customer_name, customer_email, status, payment_status")
     .eq("workshop_id", workshopId)
     .order("created_at", { ascending: false })
-    .limit(20);
+    .limit(60);
   if (term) {
     const digits = term.replace(/\D/g, "");
     const escaped = term.replace(/[%,()]/g, "");
@@ -523,13 +535,17 @@ export async function listOrderRefs(userId: string, query: string): Promise<Orde
       customer_name: string | null;
       customer_email: string | null;
       status: string;
+      payment_status: string;
     }>
-  ).map((o) => ({
-    id: o.id,
-    orderNumber: Number(o.order_number),
-    customerName: o.customer_name || o.customer_email || null,
-    status: o.status,
-  }));
+  )
+    .filter((o) => !(o.status === "levererad" && o.payment_status === "betald"))
+    .slice(0, 20)
+    .map((o) => ({
+      id: o.id,
+      orderNumber: Number(o.order_number),
+      customerName: o.customer_name || o.customer_email || null,
+      status: o.status,
+    }));
 }
 
 export async function updateOrderPaymentStatus(
@@ -723,7 +739,7 @@ export async function getWorkshopStats(userId: string): Promise<WorkshopStats> {
 
   const statusCounts: Record<ShopOrderStatus, number> = {
     mottagen: 0,
-    behandlas: 0,
+    packad: 0,
     skickad: 0,
     levererad: 0,
   };

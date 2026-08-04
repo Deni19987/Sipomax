@@ -1,7 +1,15 @@
 import { Link, Outlet, createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, ClipboardList, LogOut, MessageSquare, Settings, Tag } from "lucide-react";
+import {
+  BarChart3,
+  ClipboardList,
+  LogOut,
+  MessageSquare,
+  Settings,
+  Tag,
+  UsersRound,
+} from "lucide-react";
 import { useEffect } from "react";
 import {
   AccountSwitcherDropdown,
@@ -40,13 +48,18 @@ export const Route = createFileRoute("/verkstad")({
   component: WorkshopLayout,
 });
 
+// Sidomenyn på desktop visar allt; bottennavigeringen på mobil har plats för
+// fem knappar, så statistiken bor där bakom "Mer".
 const NAV_ITEMS = [
-  { to: "/verkstad", label: "Ordrar", icon: ClipboardList, exact: true },
-  { to: "/verkstad/produkter", label: "Produkter", icon: Tag, exact: false },
-  { to: "/verkstad/statistik", label: "Statistik", icon: BarChart3, exact: false },
-  { to: "/verkstad/chatt", label: "Chatt", icon: MessageSquare, exact: false },
-  { to: "/verkstad/installningar", label: "Mer", icon: Settings, exact: false },
+  { to: "/verkstad", label: "Ordrar", icon: ClipboardList, exact: true, mobile: true },
+  { to: "/verkstad/kunder", label: "Kunder", icon: UsersRound, exact: false, mobile: true },
+  { to: "/verkstad/produkter", label: "Produkter", icon: Tag, exact: false, mobile: true },
+  { to: "/verkstad/statistik", label: "Statistik", icon: BarChart3, exact: false, mobile: false },
+  { to: "/verkstad/chatt", label: "Chatt", icon: MessageSquare, exact: false, mobile: true },
+  { to: "/verkstad/installningar", label: "Mer", icon: Settings, exact: false, mobile: true },
 ] as const;
+
+const MOBILE_NAV_ITEMS = NAV_ITEMS.filter((item) => item.mobile);
 
 /**
  * Verkstadens skal i två lägen:
@@ -175,7 +188,7 @@ function WorkshopLayout() {
         <nav className="fixed inset-x-0 bottom-0 z-30 lg:hidden">
           <div className="mx-auto w-full max-w-3xl border-t border-border bg-card px-2 pb-[calc(env(safe-area-inset-bottom)+0.25rem)]">
             <div className="flex">
-              {NAV_ITEMS.map((item) => (
+              {MOBILE_NAV_ITEMS.map((item) => (
                 <Link
                   key={item.to}
                   to={item.to}

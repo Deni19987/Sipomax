@@ -58,6 +58,8 @@ import {
   ORDER_AMOUNT_LABELS,
   ORDER_PERIODS,
   ORDER_PERIOD_LABELS,
+  ORDER_SIZES,
+  ORDER_SIZE_LABELS,
   ORDER_SORTS,
   ORDER_SORT_LABELS,
   ORDER_VIEWS,
@@ -73,6 +75,7 @@ import {
   type OrderAmount,
   type OrderFilters,
   type OrderPeriod,
+  type OrderSize,
   type OrderSort,
   type OrderView,
 } from "@/lib/shop/order-filters";
@@ -104,14 +107,19 @@ import { cn } from "@/lib/utils";
 // bokmärka och backa tillbaka till.
 const searchSchema = z.object({
   order: z.string().optional(),
+  /** Satt när ordern öppnades från ett kundkort — ger vägen tillbaka dit. */
+  kund: z.string().optional(),
   vy: z.enum(ORDER_VIEWS as [OrderView, ...OrderView[]]).optional(),
   q: z.string().optional(),
   period: z.enum(ORDER_PERIODS as [OrderPeriod, ...OrderPeriod[]]).optional(),
   belopp: z.enum(ORDER_AMOUNTS as [OrderAmount, ...OrderAmount[]]).optional(),
+  storlek: z.enum(ORDER_SIZES as [OrderSize, ...OrderSize[]]).optional(),
   olasta: z.boolean().optional(),
   taggad: z.boolean().optional(),
   kommenterad: z.boolean().optional(),
   anteckning: z.boolean().optional(),
+  utanadress: z.boolean().optional(),
+  utankolli: z.boolean().optional(),
   sortering: z.enum(ORDER_SORTS as [OrderSort, ...OrderSort[]]).optional(),
 });
 
@@ -129,10 +137,13 @@ function searchToFilters(search: OrderSearch): OrderFilters {
     query: search.q ?? DEFAULT_FILTERS.query,
     period: search.period ?? DEFAULT_FILTERS.period,
     amount: search.belopp ?? DEFAULT_FILTERS.amount,
+    size: search.storlek ?? DEFAULT_FILTERS.size,
     unread: search.olasta ?? DEFAULT_FILTERS.unread,
     mentioned: search.taggad ?? DEFAULT_FILTERS.mentioned,
     commented: search.kommenterad ?? DEFAULT_FILTERS.commented,
     noted: search.anteckning ?? DEFAULT_FILTERS.noted,
+    missingAddress: search.utanadress ?? DEFAULT_FILTERS.missingAddress,
+    missingTracking: search.utankolli ?? DEFAULT_FILTERS.missingTracking,
     sort: search.sortering ?? DEFAULT_FILTERS.sort,
   };
 }
@@ -145,10 +156,13 @@ function filtersToSearch(filters: OrderFilters): OrderSearch {
     q: filters.query.trim() || undefined,
     period: filters.period === DEFAULT_FILTERS.period ? undefined : filters.period,
     belopp: filters.amount === DEFAULT_FILTERS.amount ? undefined : filters.amount,
+    storlek: filters.size === DEFAULT_FILTERS.size ? undefined : filters.size,
     olasta: filters.unread || undefined,
     taggad: filters.mentioned || undefined,
     kommenterad: filters.commented || undefined,
     anteckning: filters.noted || undefined,
+    utanadress: filters.missingAddress || undefined,
+    utankolli: filters.missingTracking || undefined,
     sortering: filters.sort === DEFAULT_FILTERS.sort ? undefined : filters.sort,
   };
 }
@@ -169,7 +183,13 @@ function WorkshopOrdersPage() {
   }
 
   if (search.order) {
-    return <OrderDetail orderId={search.order} backSearch={filtersToSearch(filters)} />;
+    return (
+      <OrderDetail
+        orderId={search.order}
+        backSearch={filtersToSearch(filters)}
+        fromCustomerId={search.kund}
+      />
+    );
   }
   return <OrderBoard filters={filters} setFilters={setFilters} />;
 }
@@ -238,7 +258,7 @@ function OrderBoard({
         <div>
           <h1 className="text-xl font-bold text-foreground lg:text-2xl">Beställningar</h1>
           <p className="text-xs text-muted-foreground lg:text-sm">
-            {counts["att-gora"] > 0 ? `${counts["att-gora"]} att göra` : "Inget att göra just nu"}
+            {all.length > 0 ? `${all.length} öppna beställningar` : "Inga öppna beställningar"}
             {unreadTotal > 0 ? ` · ${unreadTotal} olästa kommentarer` : ""}
           </p>
         </div>
@@ -319,7 +339,14 @@ function OrderBoard({
         <MenuButton
           icon={SlidersHorizontal}
           label="Filter"
-          active={filters.amount !== "alla" || filters.commented || filters.noted}
+          active={
+            filters.amount !== "alla" ||
+            filters.size !== "alla" ||
+            filters.commented ||
+            filters.noted ||
+            filters.missingAddress ||
+            filters.missingTracking
+          }
         >
           <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-muted-foreground">
             Ordervärde
@@ -334,6 +361,36 @@ function OrderBoard({
               </DropdownMenuRadioItem>
             ))}
           </DropdownMenuRadioGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-muted-foreground">
+            Orderstorlek
+          </DropdownMenuLabel>
+          <DropdownMenuRadioGroup
+            value={filters.size}
+            onValueChange={(value) => setFilters({ size: value as OrderSize })}
+          >
+            {ORDER_SIZES.map((size) => (
+              <DropdownMenuRadioItem key={size} value={size}>
+                {ORDER_SIZE_LABELS[size]}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-muted-foreground">
+            Behöver åtgärd
+          </DropdownMenuLabel>
+          <DropdownMenuCheckboxItem
+            checked={filters.missingAddress}
+            onCheckedChange={(checked) => setFilters({ missingAddress: !!checked })}
+          >
+            Saknar leveransadress
+          </DropdownMenuCheckboxItem>
+          <DropdownMenuCheckboxItem
+            checked={filters.missingTracking}
+            onCheckedChange={(checked) => setFilters({ missingTracking: !!checked })}
+          >
+            Saknar kollinummer
+          </DropdownMenuCheckboxItem>
           <DropdownMenuSeparator />
           <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-muted-foreground">
             Innehåll
@@ -401,8 +458,9 @@ function OrderBoard({
           <OrderListHeader />
           <OrderRows orders={visible} sort={filters.sort} />
           <div className="border-t border-border px-4 py-2 text-[11px] text-muted-foreground">
-            Visar {visible.length} av {all.length} beställningar
-            {filters.view !== "alla" ? ` · ${ORDER_VIEW_HINTS[filters.view]}` : ""}
+            Visar {visible.length} av {all.length} öppna beställningar
+            {filters.view !== "alla" ? ` · ${ORDER_VIEW_HINTS[filters.view]}` : ""} · betalda och
+            levererade ordrar finns på kundkortet
           </div>
         </div>
       ) : (
@@ -686,10 +744,13 @@ function OrderRow({ order, withBorder }: { order: ShopOrder; withBorder: boolean
 function OrderDetail({
   orderId,
   backSearch,
+  fromCustomerId,
 }: {
   orderId: string;
   /** Listans filter, så att tillbakaknappen återvänder till samma vy. */
   backSearch: Record<string, unknown>;
+  /** Satt när ordern öppnades från ett kundkort — ger vägen tillbaka dit. */
+  fromCustomerId?: string;
 }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -708,11 +769,39 @@ function OrderDetail({
     refetchInterval: 30_000,
   });
 
+  function goBack() {
+    if (fromCustomerId) {
+      navigate({ to: "/verkstad/kund/$id", params: { id: fromCustomerId } });
+      return;
+    }
+    navigate({ to: "/verkstad", search: backSearch });
+  }
+
+  // En order som blir både levererad och betald är färdigbehandlad: den lämnar
+  // orderlistan och lever vidare på kundkortet. Vi säger till och tar personalen
+  // tillbaka till listan i stället för att lämna dem på en order som inte
+  // längre går att hitta.
+  function afterChange(completed: boolean, message: string) {
+    invalidateOrder(queryClient, orderId);
+    if (order?.customerUserId) {
+      queryClient.invalidateQueries({ queryKey: ["shop-customer", order.customerUserId] });
+    }
+    queryClient.invalidateQueries({ queryKey: ["shop-customers"] });
+    if (completed) {
+      toast.success("Ordern är klar — den ligger nu som färdig beställning på kundkortet.");
+      goBack();
+    } else {
+      toast.success(message);
+    }
+  }
+
   const statusMutation = useMutation({
     mutationFn: (status: ShopOrderStatus) => updateStatus({ data: { orderId, status } }),
     onSuccess: (_, status) => {
-      toast.success(`Status ändrad till ${ORDER_STATUS_LABELS[status]}`);
-      invalidateOrder(queryClient, orderId);
+      afterChange(
+        status === "levererad" && order?.paymentStatus === "betald",
+        `Status ändrad till ${ORDER_STATUS_LABELS[status]}`,
+      );
     },
     onError: (err) =>
       toast.error(err instanceof Error ? err.message : "Statusen kunde inte uppdateras."),
@@ -760,8 +849,8 @@ function OrderDetail({
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <button
             type="button"
-            aria-label="Till alla beställningar"
-            onClick={() => navigate({ to: "/verkstad", search: backSearch })}
+            aria-label={fromCustomerId ? "Tillbaka till kundkortet" : "Till alla beställningar"}
+            onClick={goBack}
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-card shadow-sm transition-colors active:bg-accent lg:h-9 lg:w-9"
           >
             <ArrowLeft className="h-5 w-5 lg:h-4 lg:w-4" />
@@ -804,9 +893,13 @@ function OrderDetail({
               {ORDER_STATUS_LABELS[next]}
               <ArrowRight className="h-4 w-4" />
             </button>
-          ) : (
+          ) : order.paymentStatus === "betald" ? (
             <span className="flex h-12 flex-1 items-center justify-center rounded-xl bg-emerald-100 px-4 text-base font-semibold text-emerald-700 lg:h-9 lg:rounded-lg lg:text-sm lg:flex-none">
               Klar
+            </span>
+          ) : (
+            <span className="flex h-12 flex-1 items-center justify-center rounded-xl bg-rose-100 px-4 text-base font-semibold text-rose-700 lg:h-9 lg:rounded-lg lg:text-sm lg:flex-none">
+              Väntar på betalning
             </span>
           )}
 
@@ -876,12 +969,12 @@ function OrderDetail({
             </div>
           </Tabs>
 
-          <PaymentCard order={order} />
+          <PaymentCard order={order} onChanged={afterChange} />
         </div>
 
         {/* Sidospalt: vem, vart och interna noteringar */}
         <div className="space-y-3 lg:space-y-4">
-          <CustomerCard order={order} />
+          <CustomerCard order={order} fromCustomerCard={!!fromCustomerId} />
           <ShippingCard order={order} />
           <InternalNote orderId={order.id} note={order.internalNote ?? ""} />
         </div>
@@ -941,8 +1034,14 @@ function CardTitle({
 
 // ── Kund ────────────────────────────────────────────────────────────────────
 
-function CustomerCard({ order }: { order: ShopOrder }) {
-  const customerLabel = order.customerName || order.customerEmail || "";
+function CustomerCard({
+  order,
+  fromCustomerCard,
+}: {
+  order: ShopOrder;
+  /** Kom man hit från kundkortet behövs ingen till-kundkortet-knapp igen. */
+  fromCustomerCard?: boolean;
+}) {
   return (
     <div className="rounded-xl bg-card p-4 shadow-sm">
       <CardTitle icon={UserRound}>Kund</CardTitle>
@@ -970,13 +1069,14 @@ function CustomerCard({ order }: { order: ShopOrder }) {
           <p>Inga kontaktuppgifter sparade på kunden.</p>
         )}
       </div>
-      {customerLabel && (
+      {order.customerUserId && (
         <Link
-          to="/verkstad"
-          search={{ q: customerLabel, vy: "alla" }}
+          to="/verkstad/kund/$id"
+          params={{ id: order.customerUserId }}
+          search={{ order: order.id }}
           className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-card-foreground transition-colors hover:bg-accent"
         >
-          Visa kundens ordrar
+          {fromCustomerCard ? "Tillbaka till kundkortet" : "Öppna kundkortet"}
           <ArrowRight className="h-3.5 w-3.5" />
         </Link>
       )}
@@ -986,16 +1086,23 @@ function CustomerCard({ order }: { order: ShopOrder }) {
 
 // ── Betalning ───────────────────────────────────────────────────────────────
 
-function PaymentCard({ order }: { order: ShopOrder }) {
-  const queryClient = useQueryClient();
+function PaymentCard({
+  order,
+  onChanged,
+}: {
+  order: ShopOrder;
+  onChanged: (completed: boolean, message: string) => void;
+}) {
   const updatePayment = useServerFn(updateOrderPaymentStatusFn);
 
   const mutation = useMutation({
     mutationFn: (paymentStatus: PaymentStatus) =>
       updatePayment({ data: { orderId: order.id, paymentStatus } }),
     onSuccess: (_, paymentStatus) => {
-      toast.success(`Betalstatus: ${PAYMENT_STATUS_LABELS[paymentStatus]}`);
-      invalidateOrder(queryClient, order.id);
+      onChanged(
+        paymentStatus === "betald" && order.status === "levererad",
+        `Betalstatus: ${PAYMENT_STATUS_LABELS[paymentStatus]}`,
+      );
     },
     onError: (err) =>
       toast.error(err instanceof Error ? err.message : "Betalstatus kunde inte ändras."),
@@ -1025,6 +1132,13 @@ function PaymentCard({ order }: { order: ShopOrder }) {
           </button>
         ))}
       </div>
+
+      {order.status === "levererad" && order.paymentStatus !== "betald" && (
+        <p className="mt-3 rounded-lg bg-muted/50 p-2.5 text-[11px] text-muted-foreground">
+          Ordern är levererad. Så fort den markeras som betald är den färdig — då lämnar den
+          orderlistan och sparas som färdig beställning på kundkortet.
+        </p>
+      )}
 
       <div className="mt-4 space-y-1.5 border-t border-border pt-3 text-sm">
         <div className="flex items-center justify-between text-muted-foreground">
