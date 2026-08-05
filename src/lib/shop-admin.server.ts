@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { syncProductToFortnox } from "./shop-fortnox.server";
 import { assertWorkshopAccount, resolveOrderWorkshopId } from "./shop-orders.server";
 import type {
   CampaignTemplate,
@@ -23,10 +24,13 @@ type ProductRow = {
   image_url: string | null;
   status: ProductStatus;
   updated_at: string;
+  fortnox_article_number: string | null;
+  fortnox_sync_error: string | null;
+  source: "app" | "fortnox";
 };
 
 const PRODUCT_SELECT =
-  "id, name, brand, category, description, price, unit, image_url, status, updated_at";
+  "id, name, brand, category, description, price, unit, image_url, status, updated_at, fortnox_article_number, fortnox_sync_error, source";
 
 function rowToProduct(row: ProductRow): WorkshopProduct {
   return {
@@ -40,6 +44,9 @@ function rowToProduct(row: ProductRow): WorkshopProduct {
     imageUrl: row.image_url,
     status: row.status,
     updatedAt: row.updated_at,
+    fortnoxArticleNumber: row.fortnox_article_number ?? null,
+    fortnoxSyncError: row.fortnox_sync_error ?? null,
+    source: row.source ?? "app",
   };
 }
 
@@ -124,6 +131,7 @@ export async function saveWorkshopProduct(
     ...(imageUrl ? { image_url: imageUrl } : {}),
   };
 
+  let saved: WorkshopProduct;
   if (input.id) {
     const { data, error } = await admin
       .from("workshop_products")
@@ -134,16 +142,28 @@ export async function saveWorkshopProduct(
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!data) throw new Error("Produkten kunde inte hittas.");
-    return rowToProduct(data as ProductRow);
+    saved = rowToProduct(data as ProductRow);
+  } else {
+    const { data, error } = await admin
+      .from("workshop_products")
+      .insert({ ...patch, workshop_id: workshopId })
+      .select(PRODUCT_SELECT)
+      .single();
+    if (error) throw new Error(error.message);
+    saved = rowToProduct(data as ProductRow);
   }
 
-  const { data, error } = await admin
-    .from("workshop_products")
-    .insert({ ...patch, workshop_id: workshopId })
-    .select(PRODUCT_SELECT)
-    .single();
-  if (error) throw new Error(error.message);
-  return rowToProduct(data as ProductRow);
+  // Envägssynk: produkten speglas till Fortnox som artikel. Synken kan aldrig
+  // fälla sparandet — misslyckas den sparas felet på produkten i stället.
+  const { articleNumber, error: syncError } = await syncProductToFortnox(workshopId, {
+    id: saved.id,
+    name: saved.name,
+    price: saved.price,
+    unit: saved.unit,
+    fortnoxArticleNumber: saved.fortnoxArticleNumber,
+  });
+
+  return { ...saved, fortnoxArticleNumber: articleNumber, fortnoxSyncError: syncError };
 }
 
 export async function deleteWorkshopProduct(userId: string, productId: string): Promise<void> {

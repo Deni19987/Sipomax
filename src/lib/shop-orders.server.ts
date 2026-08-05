@@ -8,6 +8,12 @@ import {
 } from "./profile.server";
 import { sendPushToUser, sendPushToWorkshop } from "./push.server";
 import { getProduct } from "./shop/catalog";
+import {
+  createInvoiceForShopOrder,
+  INVOICE_COLUMNS,
+  rowToInvoice,
+  type InvoiceColumns,
+} from "./shop-fortnox.server";
 import { EMPTY_DELIVERY, type DeliveryDetails } from "./shop/delivery";
 import {
   GENERAL_THREAD,
@@ -55,7 +61,7 @@ type OrderRow = {
   created_at: string;
   updated_at: string;
   shop_order_lines?: LineRow[];
-};
+} & Partial<InvoiceColumns> & { invoice_error?: string | null };
 
 type LineRow = {
   product_id: string;
@@ -65,8 +71,7 @@ type LineRow = {
   quantity: number;
 };
 
-const ORDER_SELECT =
-  "id, order_number, workshop_id, customer_user_id, customer_email, customer_name, customer_phone, status, total, note, payment_status, shipping_recipient, shipping_street, shipping_postal_code, shipping_city, shipping_country, carrier, tracking_number, internal_note, created_at, updated_at, shop_order_lines(product_id, name, unit, unit_price, quantity)";
+const ORDER_SELECT = `id, order_number, workshop_id, customer_user_id, customer_email, customer_name, customer_phone, status, total, note, payment_status, shipping_recipient, shipping_street, shipping_postal_code, shipping_city, shipping_country, carrier, tracking_number, internal_note, invoice_error, ${INVOICE_COLUMNS}, created_at, updated_at, shop_order_lines(product_id, name, unit, unit_price, quantity)`;
 
 function rowToOrder(row: OrderRow): ShopOrder {
   return {
@@ -90,6 +95,7 @@ function rowToOrder(row: OrderRow): ShopOrder {
     carrier: row.carrier,
     trackingNumber: row.tracking_number,
     deliveryNote: row.note,
+    invoice: rowToInvoice(row),
     lines: (row.shop_order_lines ?? []).map((l) => ({
       productId: l.product_id,
       name: l.name,
@@ -103,7 +109,11 @@ function rowToOrder(row: OrderRow): ShopOrder {
 // Verkstadsvyn får med den interna anteckningen; kundvyn ska aldrig se den,
 // därför lever den bara i den här varianten.
 function rowToWorkshopOrder(row: OrderRow): ShopOrder {
-  return { ...rowToOrder(row), internalNote: row.internal_note ?? null };
+  return {
+    ...rowToOrder(row),
+    internalNote: row.internal_note ?? null,
+    invoiceError: row.invoice_error ?? null,
+  };
 }
 
 export type AccountType = "workshop" | "customer";
@@ -653,7 +663,7 @@ export async function updateShopOrderStatus(
   userId: string,
   orderId: string,
   status: ShopOrderStatus,
-): Promise<void> {
+): Promise<{ invoiceId?: string; invoiceError?: string }> {
   const workshopId = await assertWorkshopAccount(userId);
   const { data: current } = await admin
     .from("shop_orders")
@@ -683,6 +693,14 @@ export async function updateShopOrderStatus(
       toStatus: status,
     });
   }
+
+  // Levererad order faktureras automatiskt i Fortnox. Ett fel får aldrig fälla
+  // statusändringen — det sparas på ordern och kan köras om från ordervyn.
+  if (status === "levererad" && fromStatus !== "levererad") {
+    const result = await createInvoiceForShopOrder(workshopId, orderId);
+    return result.ok ? { invoiceId: result.invoiceId } : { invoiceError: result.error };
+  }
+  return {};
 }
 
 export type WorkshopStats = {
@@ -726,6 +744,7 @@ export async function getWorkshopStats(userId: string): Promise<WorkshopStats> {
     behandlas: 0,
     skickad: 0,
     levererad: 0,
+    avklarad: 0,
   };
   let monthRevenue = 0;
   let monthOrders = 0;

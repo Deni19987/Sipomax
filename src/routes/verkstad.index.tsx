@@ -11,6 +11,7 @@ import {
   ChevronRight,
   Copy,
   CreditCard,
+  Download,
   ExternalLink,
   Mail,
   MapPin,
@@ -19,6 +20,8 @@ import {
   NotebookPen,
   Package,
   Phone,
+  Receipt,
+  RefreshCw,
   Search,
   SlidersHorizontal,
   Truck,
@@ -56,6 +59,8 @@ import {
   DEFAULT_FILTERS,
   ORDER_AMOUNTS,
   ORDER_AMOUNT_LABELS,
+  ORDER_PAYMENTS,
+  ORDER_PAYMENT_LABELS,
   ORDER_PERIODS,
   ORDER_PERIOD_LABELS,
   ORDER_SORTS,
@@ -66,12 +71,14 @@ import {
   activeFilterChips,
   clearFilterKey,
   clearRefinements,
+  countByPayment,
   countByView,
   dayGroupLabel,
   filterOrders,
   groupsByDay,
   type OrderAmount,
   type OrderFilters,
+  type OrderPayment,
   type OrderPeriod,
   type OrderSort,
   type OrderView,
@@ -89,6 +96,7 @@ import {
   describeOrderEvent,
   formatAddressLines,
   getCarrier,
+  invoiceStateLabel,
   nextOrderStatus,
   previousOrderStatus,
   trackingLink,
@@ -97,6 +105,13 @@ import {
   type ShopOrder,
   type ShopOrderStatus,
 } from "@/lib/shop/orders";
+import {
+  createOrderInvoiceFn,
+  getWorkshopOrderInvoicePdfFn,
+  refreshOrderInvoiceFn,
+  syncShopOrderPaymentsFn,
+} from "@/lib/shop-fortnox.functions";
+import { openOrDownloadPdf } from "@/lib/pdf-download";
 import { cn } from "@/lib/utils";
 
 // ?order=<uuid> öppnar orderdetaljerna, utan den visas översikten. Övriga
@@ -108,6 +123,7 @@ const searchSchema = z.object({
   q: z.string().optional(),
   period: z.enum(ORDER_PERIODS as [OrderPeriod, ...OrderPeriod[]]).optional(),
   belopp: z.enum(ORDER_AMOUNTS as [OrderAmount, ...OrderAmount[]]).optional(),
+  betalning: z.enum(ORDER_PAYMENTS as [OrderPayment, ...OrderPayment[]]).optional(),
   olasta: z.boolean().optional(),
   taggad: z.boolean().optional(),
   kommenterad: z.boolean().optional(),
@@ -129,6 +145,7 @@ function searchToFilters(search: OrderSearch): OrderFilters {
     query: search.q ?? DEFAULT_FILTERS.query,
     period: search.period ?? DEFAULT_FILTERS.period,
     amount: search.belopp ?? DEFAULT_FILTERS.amount,
+    payment: search.betalning ?? DEFAULT_FILTERS.payment,
     unread: search.olasta ?? DEFAULT_FILTERS.unread,
     mentioned: search.taggad ?? DEFAULT_FILTERS.mentioned,
     commented: search.kommenterad ?? DEFAULT_FILTERS.commented,
@@ -145,6 +162,7 @@ function filtersToSearch(filters: OrderFilters): OrderSearch {
     q: filters.query.trim() || undefined,
     period: filters.period === DEFAULT_FILTERS.period ? undefined : filters.period,
     belopp: filters.amount === DEFAULT_FILTERS.amount ? undefined : filters.amount,
+    betalning: filters.payment === DEFAULT_FILTERS.payment ? undefined : filters.payment,
     olasta: filters.unread || undefined,
     taggad: filters.mentioned || undefined,
     kommenterad: filters.commented || undefined,
@@ -206,12 +224,32 @@ function OrderBoard({
   filters: OrderFilters;
   setFilters: (next: Partial<OrderFilters>) => void;
 }) {
+  const queryClient = useQueryClient();
   const fetchOrders = useServerFn(listWorkshopOrdersFn);
+  const syncPayments = useServerFn(syncShopOrderPaymentsFn);
   const { data: orders, isLoading } = useQuery({
     queryKey: ["workshop-orders"],
     queryFn: () => fetchOrders(),
     refetchInterval: 30_000,
   });
+
+  // Betalningar registreras i Fortnox, inte här. Medan någon har listan uppe
+  // stäms de obetalda fakturorna av med jämna mellanrum, så att en betald
+  // faktura flyttar sin order till Avklarad utan att någon behöver göra något.
+  // Intervallet är glest — Fortnox API:t ska inte pollas i onödan.
+  const { data: paymentSync } = useQuery({
+    queryKey: ["shop-invoice-sync"],
+    queryFn: () => syncPayments(),
+    refetchInterval: 5 * 60_000,
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
+  useEffect(() => {
+    if (paymentSync?.completed) {
+      queryClient.invalidateQueries({ queryKey: ["workshop-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["workshop-stats"] });
+    }
+  }, [paymentSync, queryClient]);
 
   // Sökrutan skrivs lokalt och speglas till URL:en — annars skulle varje
   // tangenttryck bli en egen post i webbläsarhistoriken.
@@ -226,6 +264,15 @@ function OrderBoard({
 
   const all = useMemo(() => orders ?? [], [orders]);
   const counts = useMemo(() => countByView(all, filters), [all, filters]);
+  // Underlag till menyn som fälls ut när man klickar på en statusflik: hur
+  // många av vyns ordrar som ligger i varje betalläge.
+  const paymentCounts = useMemo(
+    () =>
+      Object.fromEntries(
+        ORDER_VIEWS.map((view) => [view, countByPayment(all, filters, view)]),
+      ) as Record<OrderView, Record<OrderPayment, number>>,
+    [all, filters],
+  );
   const visible = useMemo(() => filterOrders(all, filters), [all, filters]);
   const chips = activeFilterChips(filters);
 
@@ -272,10 +319,13 @@ function OrderBoard({
           <ViewTab
             key={view}
             label={ORDER_VIEW_LABELS[view]}
+            hint={ORDER_VIEW_HINTS[view]}
             count={counts[view]}
             dot={view in ORDER_STATUS_DOT ? ORDER_STATUS_DOT[view as ShopOrderStatus] : undefined}
             active={filters.view === view}
-            onClick={() => setFilters({ view })}
+            payment={filters.payment}
+            paymentCounts={paymentCounts[view]}
+            onSelect={(payment) => setFilters({ view, payment })}
           />
         ))}
       </div>
@@ -431,40 +481,85 @@ function OrderBoard({
   );
 }
 
-/** Vyflik med antal, t.ex. "Att göra 5". */
+/**
+ * Vyflik med antal, t.ex. "Levererad 5".
+ *
+ * Ett klick fäller ut fliken till en liten meny med vyns betallägen. Det är
+ * där den andra halvan av frågan bor: en levererad order kan vara obetald,
+ * fakturerad, betald eller på väg tillbaka som retur, och menyn låter en
+ * filtrera på precis det utan att lämna fliken.
+ */
 function ViewTab({
   label,
+  hint,
   count,
   dot,
   active,
-  onClick,
+  payment,
+  paymentCounts,
+  onSelect,
 }: {
   label: string;
+  hint: string;
   count: number;
   dot?: string;
   active: boolean;
-  onClick: () => void;
+  payment: OrderPayment;
+  paymentCounts: Record<OrderPayment, number>;
+  onSelect: (payment: OrderPayment) => void;
 }) {
+  const activePayment = active ? payment : "alla";
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "flex h-10 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-sm font-medium transition-colors lg:h-8 lg:text-xs",
-        active ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground shadow-sm",
-      )}
-    >
-      {dot && <span className={cn("h-1.5 w-1.5 rounded-full", dot)} />}
-      {label}
-      <span
+    <DropdownMenu>
+      <DropdownMenuTrigger
         className={cn(
-          "rounded-full px-1.5 text-[11px] font-semibold",
-          active ? "bg-primary-foreground/20" : "bg-muted",
+          "flex h-10 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-sm font-medium transition-colors lg:h-8 lg:text-xs",
+          active ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground shadow-sm",
         )}
       >
-        {count}
-      </span>
-    </button>
+        {dot && <span className={cn("h-1.5 w-1.5 rounded-full", dot)} />}
+        {label}
+        {active && payment !== "alla" && (
+          <span className="text-[11px] font-semibold opacity-80">
+            · {ORDER_PAYMENT_LABELS[payment]}
+          </span>
+        )}
+        <span
+          className={cn(
+            "rounded-full px-1.5 text-[11px] font-semibold",
+            active ? "bg-primary-foreground/20" : "bg-muted",
+          )}
+        >
+          {count}
+        </span>
+        <ChevronDown className="h-3 w-3 opacity-70" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-64">
+        <DropdownMenuLabel className="text-[11px] font-normal text-muted-foreground">
+          {hint}
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuRadioGroup
+          value={activePayment}
+          onValueChange={(value) => onSelect(value as OrderPayment)}
+        >
+          {ORDER_PAYMENTS.map((option) => (
+            <DropdownMenuRadioItem
+              key={option}
+              value={option}
+              disabled={paymentCounts[option] === 0 && option !== activePayment}
+            >
+              <span className="flex-1">
+                {option === "alla" ? `Alla · ${label.toLowerCase()}` : ORDER_PAYMENT_LABELS[option]}
+              </span>
+              <span className="ml-2 text-[11px] font-semibold text-muted-foreground">
+                {paymentCounts[option]}
+              </span>
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -710,8 +805,14 @@ function OrderDetail({
 
   const statusMutation = useMutation({
     mutationFn: (status: ShopOrderStatus) => updateStatus({ data: { orderId, status } }),
-    onSuccess: (_, status) => {
-      toast.success(`Status ändrad till ${ORDER_STATUS_LABELS[status]}`);
+    onSuccess: (result, status) => {
+      if (result.invoiceError) {
+        toast.warning(`Levererad — men fakturan misslyckades: ${result.invoiceError}`);
+      } else if (result.invoiceId) {
+        toast.success(`Levererad · faktura #${result.invoiceId} skapad i Fortnox`);
+      } else {
+        toast.success(`Status ändrad till ${ORDER_STATUS_LABELS[status]}`);
+      }
       invalidateOrder(queryClient, orderId);
     },
     onError: (err) =>
@@ -876,6 +977,7 @@ function OrderDetail({
             </div>
           </Tabs>
 
+          <InvoiceCard order={order} />
           <PaymentCard order={order} />
         </div>
 
@@ -979,6 +1081,133 @@ function CustomerCard({ order }: { order: ShopOrder }) {
           Visa kundens ordrar
           <ArrowRight className="h-3.5 w-3.5" />
         </Link>
+      )}
+    </div>
+  );
+}
+
+// ── Faktura (Fortnox) ───────────────────────────────────────────────────────
+//
+// Fakturan skapas automatiskt när ordern markeras som levererad. Kortet visar
+// vad som hänt: fakturan och dess PDF, en avstämning mot Fortnox betalstatus,
+// och — om något gick fel — felet plus möjligheten att köra om.
+
+function InvoiceCard({ order }: { order: ShopOrder }) {
+  const queryClient = useQueryClient();
+  const fetchPdf = useServerFn(getWorkshopOrderInvoicePdfFn);
+  const refreshInvoice = useServerFn(refreshOrderInvoiceFn);
+  const createInvoice = useServerFn(createOrderInvoiceFn);
+  const invoice = order.invoice;
+
+  const downloadMutation = useMutation({
+    mutationFn: () => fetchPdf({ data: { orderId: order.id } }),
+    onSuccess: (result) =>
+      openOrDownloadPdf(result.pdfBase64, `Faktura-${result.invoiceId}.pdf`).catch(() =>
+        toast.error("Fakturan kunde inte öppnas."),
+      ),
+    onError: (err) =>
+      toast.error(err instanceof Error ? err.message : "Fakturan kunde inte hämtas."),
+  });
+
+  const refreshMutation = useMutation({
+    mutationFn: () => refreshInvoice({ data: { orderId: order.id } }),
+    onSuccess: (result) => {
+      toast.success(
+        result.paid ? "Fakturan är betald — ordern är avklarad." : "Fakturan är ännu inte betald.",
+      );
+      invalidateOrder(queryClient, order.id);
+    },
+    onError: (err) =>
+      toast.error(err instanceof Error ? err.message : "Fortnox kunde inte kontaktas."),
+  });
+
+  const createMutation = useMutation({
+    mutationFn: () => createInvoice({ data: { orderId: order.id } }),
+    onSuccess: (result) => {
+      toast.success(`Faktura #${result.invoiceId} skapades i Fortnox.`);
+      invalidateOrder(queryClient, order.id);
+    },
+    onError: (err) =>
+      toast.error(err instanceof Error ? err.message : "Fakturan kunde inte skapas."),
+  });
+
+  return (
+    <div className="rounded-xl bg-card p-4 shadow-sm">
+      <CardTitle icon={Receipt}>Faktura</CardTitle>
+
+      {invoice ? (
+        <>
+          <div className="mt-3 space-y-1.5 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Fakturanummer</span>
+              <span className="font-semibold text-card-foreground">#{invoice.invoiceId}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Status i Fortnox</span>
+              <span className="font-semibold text-card-foreground">
+                {invoiceStateLabel(invoice)}
+              </span>
+            </div>
+            {invoice.total != null && (
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Belopp (inkl. moms)</span>
+                <span className="font-semibold text-card-foreground">
+                  {formatPrice(invoice.total)}
+                </span>
+              </div>
+            )}
+            {invoice.dueDate && (
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Förfaller</span>
+                <span className="text-card-foreground">{invoice.dueDate}</span>
+              </div>
+            )}
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={downloadMutation.isPending}
+              onClick={() => downloadMutation.mutate()}
+              className="flex h-11 items-center gap-1.5 rounded-lg bg-primary px-3.5 text-sm font-semibold text-primary-foreground transition-opacity disabled:opacity-50 lg:h-8 lg:text-xs"
+            >
+              <Download className="h-4 w-4" />
+              {downloadMutation.isPending ? "Hämtar…" : "Ladda ner faktura"}
+            </button>
+            {!invoice.paidAt && (
+              <button
+                type="button"
+                disabled={refreshMutation.isPending}
+                onClick={() => refreshMutation.mutate()}
+                className="flex h-11 items-center gap-1.5 rounded-lg bg-muted px-3.5 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50 lg:h-8 lg:text-xs"
+              >
+                <RefreshCw className={cn("h-4 w-4", refreshMutation.isPending && "animate-spin")} />
+                Uppdatera från Fortnox
+              </button>
+            )}
+          </div>
+        </>
+      ) : (
+        <div className="mt-3 space-y-3">
+          <p className="text-xs text-muted-foreground">
+            {order.invoiceError
+              ? `Fakturan kunde inte skapas: ${order.invoiceError}`
+              : order.status === "levererad" || order.status === "avklarad"
+                ? "Ingen faktura är kopplad till ordern ännu."
+                : "Fakturan skapas automatiskt i Fortnox när ordern markeras som levererad."}
+          </p>
+          {(order.invoiceError || order.status === "levererad" || order.status === "avklarad") && (
+            <button
+              type="button"
+              disabled={createMutation.isPending}
+              onClick={() => createMutation.mutate()}
+              className="flex h-11 items-center gap-1.5 rounded-lg bg-primary px-3.5 text-sm font-semibold text-primary-foreground transition-opacity disabled:opacity-50 lg:h-8 lg:text-xs"
+            >
+              <Receipt className="h-4 w-4" />
+              {createMutation.isPending ? "Skapar…" : "Skapa faktura i Fortnox"}
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
@@ -1421,6 +1650,9 @@ const EVENT_ICON: Record<OrderEvent["type"], typeof Package> = {
   comment: MessageSquare,
   payment_changed: CreditCard,
   shipping_updated: Truck,
+  invoice_created: Receipt,
+  invoice_failed: X,
+  invoice_paid: CreditCard,
 };
 
 function OrderHistory({ orderId }: { orderId: string }) {

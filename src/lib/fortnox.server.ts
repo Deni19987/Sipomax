@@ -58,13 +58,18 @@ function b64url(buf: Buffer): string {
   return buf.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-export function signState(payload: { userId: string; ts: number }): string {
+// `returnTo` is the in-app path the OAuth callback should send the user back
+// to (the workshop CRM and the shop app have different settings pages). It is
+// part of the signed payload so a crafted state can never redirect elsewhere.
+export type FortnoxState = { userId: string; ts: number; returnTo?: string };
+
+export function signState(payload: FortnoxState): string {
   const body = b64url(Buffer.from(JSON.stringify(payload)));
   const sig = b64url(createHmac("sha256", stateSecret()).update(body).digest());
   return `${body}.${sig}`;
 }
 
-export function verifyState(token: string): { userId: string; ts: number } {
+export function verifyState(token: string): FortnoxState {
   const [body, sig] = token.split(".");
   if (!body || !sig) throw new Error("Invalid state");
   const expected = b64url(createHmac("sha256", stateSecret()).update(body).digest());
@@ -1768,7 +1773,106 @@ export async function buildLocalFortnoxInvoicePreview(
   };
 }
 
-async function bookkeepFortnoxInvoice(userId: string, documentNumber: string): Promise<void> {
+// ---------------------------------------------------------------------------
+// Generic invoice creation (used by the shop flow, which invoices a webshop
+// order rather than a workshop job)
+// ---------------------------------------------------------------------------
+
+export interface FortnoxInvoiceLineInput {
+  articleNumber?: string | null;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  unit?: string | null;
+  vat?: number | null;
+}
+
+export interface FortnoxInvoiceInput {
+  customerNumber: string;
+  lines: FortnoxInvoiceLineInput[];
+  emailTo?: string | null;
+  ourReference?: string | null;
+  yourReference?: string | null;
+  remarks?: string | null;
+  externalReference?: string | null;
+  /** Leveransadress på fakturan (butiksorderns fraktadress). */
+  delivery?: {
+    name?: string | null;
+    address?: string | null;
+    zipCode?: string | null;
+    city?: string | null;
+    country?: string | null;
+  } | null;
+}
+
+/**
+ * Create a brand-new invoice in Fortnox from explicit lines. Unlike the job
+ * flow there is no draft to reuse — the caller owns de-duplication (the shop
+ * flow stores the returned document number on the order and never invoices the
+ * same order twice).
+ */
+export async function createFortnoxInvoiceFromLines(
+  userId: string,
+  input: FortnoxInvoiceInput,
+): Promise<{ invoiceId: string; invoice: any }> {
+  await warmFortnoxToken(userId);
+  const printTemplate = await getFortnoxDefaultPrintTemplate(userId);
+
+  const rows = input.lines.map((line) => {
+    const row: Record<string, any> = {
+      Description: sanitizeFortnoxText(line.description || "Artikel", 50),
+      DeliveredQuantity: String(line.quantity ?? 1),
+      // Always send Price so the order's price wins over the article master.
+      Price: Number(line.unitPrice ?? 0),
+      VAT: line.vat != null ? Number(line.vat) : 25,
+    };
+    const articleNumber = (line.articleNumber ?? "").toString().trim();
+    if (articleNumber) row.ArticleNumber = articleNumber;
+    if (line.unit) row.Unit = sanitizeFortnoxText(line.unit, 10);
+    return row;
+  });
+
+  const delivery = input.delivery ?? null;
+  const invoice: Record<string, any> = {
+    CustomerNumber: input.customerNumber,
+    InvoiceDate: new Date().toISOString().slice(0, 10),
+    Currency: "SEK",
+    InvoiceRows: rows,
+    ...(printTemplate ? { PrintTemplate: printTemplate } : {}),
+    ...(input.emailTo ? { EmailInformation: { EmailAddressTo: input.emailTo.trim() } } : {}),
+    ...(input.ourReference ? { OurReference: sanitizeFortnoxText(input.ourReference, 50) } : {}),
+    ...(input.yourReference ? { YourReference: sanitizeFortnoxText(input.yourReference, 50) } : {}),
+    ...(input.remarks ? { Remarks: sanitizeFortnoxText(input.remarks, 1000) } : {}),
+    ...(input.externalReference
+      ? { ExternalInvoiceReference1: sanitizeFortnoxText(input.externalReference, 50) }
+      : {}),
+    ...(delivery?.name ? { DeliveryName: sanitizeFortnoxText(delivery.name, 1024) } : {}),
+    ...(delivery?.address ? { DeliveryAddress1: sanitizeFortnoxText(delivery.address, 1024) } : {}),
+    ...(delivery?.zipCode
+      ? { DeliveryZipCode: String(delivery.zipCode).replace(/[^0-9 ]/g, "").trim() }
+      : {}),
+    ...(delivery?.city ? { DeliveryCity: sanitizeFortnoxText(delivery.city, 1024) } : {}),
+  };
+
+  const body = sanitizeFortnoxInvoicePayload({ Invoice: invoice });
+  const created = await fortnoxJson<{ Invoice?: any }>(userId, "/invoices", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  const documentNumber = created.Invoice?.DocumentNumber;
+  if (documentNumber == null) throw new Error("Fortnox returnerade inget fakturanummer.");
+  return { invoiceId: String(documentNumber), invoice: created.Invoice ?? null };
+}
+
+/** Render an existing Fortnox invoice as a base64 PDF. */
+export async function fetchFortnoxInvoicePdfByNumber(
+  userId: string,
+  documentNumber: string,
+): Promise<string> {
+  return fetchFortnoxInvoicePdf(userId, documentNumber);
+}
+
+export async function bookkeepFortnoxInvoice(userId: string, documentNumber: string): Promise<void> {
   const id = encodeURIComponent(documentNumber);
   const path = `/invoices/${id}/bookkeep`;
   const res = await fortnoxFetch(userId, path, { method: "PUT" });

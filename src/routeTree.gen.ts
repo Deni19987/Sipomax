@@ -51,6 +51,7 @@ import { Route as ApiPublicHooksVismaRunInvoicesRouteImport } from './routes/api
 import { Route as ApiPublicHooksSendDueOpportunitiesRouteImport } from './routes/api/public/hooks/send-due-opportunities'
 import { Route as ApiPublicHooksScandicRemindersRouteImport } from './routes/api/public/hooks/scandic-reminders'
 import { Route as ApiPublicHooksPushRemindersRouteImport } from './routes/api/public/hooks/push-reminders'
+import { Route as ApiPublicHooksFortnoxShopPaymentsRouteImport } from './routes/api/public/hooks/fortnox-shop-payments'
 import { Route as ApiPublicHooksElksIncomingRouteImport } from './routes/api/public/hooks/elks-incoming'
 import { Route as ApiPublicHooksChatRemindersRouteImport } from './routes/api/public/hooks/chat-reminders'
 import { Route as ApiPublicFortnoxCallbackRouteImport } from './routes/api/public/fortnox.callback'
@@ -274,6 +275,12 @@ const ApiPublicHooksPushRemindersRoute =
     path: '/api/public/hooks/push-reminders',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksFortnoxShopPaymentsRoute =
+  ApiPublicHooksFortnoxShopPaymentsRouteImport.update({
+    id: '/api/public/hooks/fortnox-shop-payments',
+    path: '/api/public/hooks/fortnox-shop-payments',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksElksIncomingRoute =
   ApiPublicHooksElksIncomingRouteImport.update({
     id: '/api/public/hooks/elks-incoming',
@@ -345,6 +352,7 @@ export interface FileRoutesByFullPath {
   '/api/public/fortnox/callback': typeof ApiPublicFortnoxCallbackRoute
   '/api/public/hooks/chat-reminders': typeof ApiPublicHooksChatRemindersRoute
   '/api/public/hooks/elks-incoming': typeof ApiPublicHooksElksIncomingRoute
+  '/api/public/hooks/fortnox-shop-payments': typeof ApiPublicHooksFortnoxShopPaymentsRoute
   '/api/public/hooks/push-reminders': typeof ApiPublicHooksPushRemindersRoute
   '/api/public/hooks/scandic-reminders': typeof ApiPublicHooksScandicRemindersRoute
   '/api/public/hooks/send-due-opportunities': typeof ApiPublicHooksSendDueOpportunitiesRoute
@@ -392,6 +400,7 @@ export interface FileRoutesByTo {
   '/api/public/fortnox/callback': typeof ApiPublicFortnoxCallbackRoute
   '/api/public/hooks/chat-reminders': typeof ApiPublicHooksChatRemindersRoute
   '/api/public/hooks/elks-incoming': typeof ApiPublicHooksElksIncomingRoute
+  '/api/public/hooks/fortnox-shop-payments': typeof ApiPublicHooksFortnoxShopPaymentsRoute
   '/api/public/hooks/push-reminders': typeof ApiPublicHooksPushRemindersRoute
   '/api/public/hooks/scandic-reminders': typeof ApiPublicHooksScandicRemindersRoute
   '/api/public/hooks/send-due-opportunities': typeof ApiPublicHooksSendDueOpportunitiesRoute
@@ -442,6 +451,7 @@ export interface FileRoutesById {
   '/api/public/fortnox/callback': typeof ApiPublicFortnoxCallbackRoute
   '/api/public/hooks/chat-reminders': typeof ApiPublicHooksChatRemindersRoute
   '/api/public/hooks/elks-incoming': typeof ApiPublicHooksElksIncomingRoute
+  '/api/public/hooks/fortnox-shop-payments': typeof ApiPublicHooksFortnoxShopPaymentsRoute
   '/api/public/hooks/push-reminders': typeof ApiPublicHooksPushRemindersRoute
   '/api/public/hooks/scandic-reminders': typeof ApiPublicHooksScandicRemindersRoute
   '/api/public/hooks/send-due-opportunities': typeof ApiPublicHooksSendDueOpportunitiesRoute
@@ -492,6 +502,7 @@ export interface FileRouteTypes {
     | '/api/public/fortnox/callback'
     | '/api/public/hooks/chat-reminders'
     | '/api/public/hooks/elks-incoming'
+    | '/api/public/hooks/fortnox-shop-payments'
     | '/api/public/hooks/push-reminders'
     | '/api/public/hooks/scandic-reminders'
     | '/api/public/hooks/send-due-opportunities'
@@ -539,6 +550,7 @@ export interface FileRouteTypes {
     | '/api/public/fortnox/callback'
     | '/api/public/hooks/chat-reminders'
     | '/api/public/hooks/elks-incoming'
+    | '/api/public/hooks/fortnox-shop-payments'
     | '/api/public/hooks/push-reminders'
     | '/api/public/hooks/scandic-reminders'
     | '/api/public/hooks/send-due-opportunities'
@@ -588,6 +600,7 @@ export interface FileRouteTypes {
     | '/api/public/fortnox/callback'
     | '/api/public/hooks/chat-reminders'
     | '/api/public/hooks/elks-incoming'
+    | '/api/public/hooks/fortnox-shop-payments'
     | '/api/public/hooks/push-reminders'
     | '/api/public/hooks/scandic-reminders'
     | '/api/public/hooks/send-due-opportunities'
@@ -621,6 +634,7 @@ export interface RootRouteChildren {
   ApiPublicFortnoxCallbackRoute: typeof ApiPublicFortnoxCallbackRoute
   ApiPublicHooksChatRemindersRoute: typeof ApiPublicHooksChatRemindersRoute
   ApiPublicHooksElksIncomingRoute: typeof ApiPublicHooksElksIncomingRoute
+  ApiPublicHooksFortnoxShopPaymentsRoute: typeof ApiPublicHooksFortnoxShopPaymentsRoute
   ApiPublicHooksPushRemindersRoute: typeof ApiPublicHooksPushRemindersRoute
   ApiPublicHooksScandicRemindersRoute: typeof ApiPublicHooksScandicRemindersRoute
   ApiPublicHooksSendDueOpportunitiesRoute: typeof ApiPublicHooksSendDueOpportunitiesRoute
@@ -924,6 +938,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksPushRemindersRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/fortnox-shop-payments': {
+      id: '/api/public/hooks/fortnox-shop-payments'
+      path: '/api/public/hooks/fortnox-shop-payments'
+      fullPath: '/api/public/hooks/fortnox-shop-payments'
+      preLoaderRoute: typeof ApiPublicHooksFortnoxShopPaymentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/elks-incoming': {
       id: '/api/public/hooks/elks-incoming'
       path: '/api/public/hooks/elks-incoming'
@@ -1063,6 +1084,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicFortnoxCallbackRoute: ApiPublicFortnoxCallbackRoute,
   ApiPublicHooksChatRemindersRoute: ApiPublicHooksChatRemindersRoute,
   ApiPublicHooksElksIncomingRoute: ApiPublicHooksElksIncomingRoute,
+  ApiPublicHooksFortnoxShopPaymentsRoute:
+    ApiPublicHooksFortnoxShopPaymentsRoute,
   ApiPublicHooksPushRemindersRoute: ApiPublicHooksPushRemindersRoute,
   ApiPublicHooksScandicRemindersRoute: ApiPublicHooksScandicRemindersRoute,
   ApiPublicHooksSendDueOpportunitiesRoute:

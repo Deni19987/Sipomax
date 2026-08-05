@@ -9,8 +9,8 @@
 //  4. Långsvansen (ordervärde, anteckningar, har kommentarer) samlas i en
 //     enda Filter-meny så att grundvyn förblir lugn.
 
-import type { ShopOrder, ShopOrderStatus } from "./orders";
-import { ORDER_STATUSES, ORDER_STATUS_LABELS } from "./orders";
+import type { PaymentStatus, ShopOrder, ShopOrderStatus } from "./orders";
+import { ORDER_STATUSES, ORDER_STATUS_LABELS, PAYMENT_STATUS_LABELS } from "./orders";
 
 // ── Vyer (flikarna) ─────────────────────────────────────────────────────────
 
@@ -30,7 +30,8 @@ export const ORDER_VIEW_HINTS: Record<OrderView, string> = {
   mottagen: "Nya beställningar som ingen börjat med",
   behandlas: "Plockas eller förbereds i verkstaden",
   skickad: "Skickad eller redo för upphämtning",
-  levererad: "Avslutad och levererad till kund",
+  levererad: "Levererad till kund — faktura skapad, väntar på betalning",
+  avklarad: "Fakturan är betald i Fortnox och ordern är klar",
 };
 
 function matchesView(order: ShopOrder, view: OrderView): boolean {
@@ -60,6 +61,28 @@ function matchesPeriod(order: ShopOrder, period: OrderPeriod, now: Date): boolea
   const cutoff = new Date(now);
   cutoff.setDate(cutoff.getDate() - days);
   return created >= cutoff;
+}
+
+// ── Betalstatus ─────────────────────────────────────────────────────────────
+//
+// En levererad order kan vara obetald, fakturerad, betald eller på väg
+// tillbaka som retur. Därför fälls varje statusflik ut till en liten meny där
+// betalläget går att välja som underfilter.
+
+export type OrderPayment = "alla" | PaymentStatus;
+
+export const ORDER_PAYMENTS: OrderPayment[] = [
+  "alla",
+  ...(Object.keys(PAYMENT_STATUS_LABELS) as PaymentStatus[]),
+];
+
+export const ORDER_PAYMENT_LABELS: Record<OrderPayment, string> = {
+  alla: "Alla betallägen",
+  ...PAYMENT_STATUS_LABELS,
+};
+
+function matchesPayment(order: ShopOrder, payment: OrderPayment): boolean {
+  return payment === "alla" || order.paymentStatus === payment;
 }
 
 // ── Ordervärde ──────────────────────────────────────────────────────────────
@@ -99,6 +122,8 @@ export type OrderFilters = {
   query: string;
   period: OrderPeriod;
   amount: OrderAmount;
+  /** Betalläge inom vyn, valt i statusflikens meny. */
+  payment: OrderPayment;
   /** Bara ordrar med olästa kommentarer. */
   unread: boolean;
   /** Bara ordrar där jag själv blivit taggad. */
@@ -115,6 +140,7 @@ export const DEFAULT_FILTERS: OrderFilters = {
   query: "",
   period: "alla",
   amount: "alla",
+  payment: "alla",
   unread: false,
   mentioned: false,
   commented: false,
@@ -151,6 +177,7 @@ export function matchesRefinements(
   if (!matchesQuery(order, filters.query)) return false;
   if (!matchesPeriod(order, filters.period, now)) return false;
   if (!matchesAmount(order, filters.amount)) return false;
+  if (!matchesPayment(order, filters.payment)) return false;
   if (filters.unread && (order.unreadCount ?? 0) === 0) return false;
   if (filters.mentioned && !order.mentionsMe) return false;
   if (filters.commented && (order.messageCount ?? 0) === 0) return false;
@@ -203,6 +230,31 @@ export function countByView(
   return counts;
 }
 
+/**
+ * Antal per betalläge inom en vy, räknat mot de övriga filtren men utan det
+ * aktiva betalfiltret — annars skulle menyn bara visa noll för alla andra
+ * alternativ än det man redan valt.
+ */
+export function countByPayment(
+  orders: ShopOrder[],
+  filters: OrderFilters,
+  view: OrderView,
+  now: Date = new Date(),
+): Record<OrderPayment, number> {
+  const counts = Object.fromEntries(ORDER_PAYMENTS.map((p) => [p, 0])) as Record<
+    OrderPayment,
+    number
+  >;
+  const base = { ...filters, payment: "alla" as OrderPayment };
+  for (const order of orders) {
+    if (!matchesView(order, view)) continue;
+    if (!matchesRefinements(order, base, now)) continue;
+    counts.alla += 1;
+    counts[order.paymentStatus] += 1;
+  }
+  return counts;
+}
+
 // ── Aktiva filter som chips ─────────────────────────────────────────────────
 
 export type FilterChipInfo = {
@@ -218,6 +270,9 @@ export function activeFilterChips(filters: OrderFilters): FilterChipInfo[] {
   }
   if (filters.amount !== "alla") {
     chips.push({ key: "amount", label: ORDER_AMOUNT_LABELS[filters.amount] });
+  }
+  if (filters.payment !== "alla") {
+    chips.push({ key: "payment", label: ORDER_PAYMENT_LABELS[filters.payment] });
   }
   if (filters.unread) chips.push({ key: "unread", label: "Olästa kommentarer" });
   if (filters.mentioned) chips.push({ key: "mentioned", label: "Jag är taggad" });

@@ -147,7 +147,8 @@ function ProductsSection() {
     <div className="flex flex-col space-y-3">
       <p className="text-xs text-muted-foreground">
         Dina egna produkter i butiken. Publicerade produkter syns för kunder — utkast ser bara
-        verkstaden.
+        verkstaden. Är Fortnox anslutet läggs varje produkt du sparar här upp som artikel i Fortnox;
+        artiklar som skapas direkt i Fortnox hämtas inte in.
       </p>
       <Button
         className="w-full rounded-full lg:w-auto lg:self-start lg:px-6"
@@ -187,16 +188,32 @@ function ProductsSection() {
                     {formatPrice(product.price)}
                     {product.unit ? ` · ${product.unit}` : ""}
                   </p>
-                  <span
-                    className={cn(
-                      "mt-1 inline-block rounded-md px-2 py-0.5 text-[11px] font-medium",
-                      product.status === "published"
-                        ? "bg-emerald-100 text-emerald-700"
-                        : "bg-amber-100 text-amber-700",
-                    )}
-                  >
-                    {product.status === "published" ? "Publicerad" : "Utkast"}
-                  </span>
+                  <div className="mt-1 flex flex-wrap items-center gap-1">
+                    <span
+                      className={cn(
+                        "inline-block rounded-md px-2 py-0.5 text-[11px] font-medium",
+                        product.status === "published"
+                          ? "bg-emerald-100 text-emerald-700"
+                          : "bg-amber-100 text-amber-700",
+                      )}
+                    >
+                      {product.status === "published" ? "Publicerad" : "Utkast"}
+                    </span>
+                    {/* Envägssynken mot Fortnox syns direkt på produkten: art.nr
+                        när den är speglad, felet när den inte är det. */}
+                    {product.fortnoxSyncError ? (
+                      <span
+                        title={product.fortnoxSyncError}
+                        className="inline-block rounded-md bg-rose-100 px-2 py-0.5 text-[11px] font-medium text-rose-700"
+                      >
+                        Fortnox-fel
+                      </span>
+                    ) : product.fortnoxArticleNumber ? (
+                      <span className="inline-block rounded-md bg-sky-100 px-2 py-0.5 text-[11px] font-medium text-sky-700">
+                        Fortnox {product.fortnoxArticleNumber}
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-2">
                   <button
