@@ -130,12 +130,14 @@ export const updateShopOrderStatusFn = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
-    await updateShopOrderStatus(
+    // Svaret bär med sig fakturan som skapades när ordern blev levererad, så
+    // att verkstaden får veta det direkt i samma klick.
+    const result = await updateShopOrderStatus(
       context.userId,
       data.orderId,
       data.status as (typeof ORDER_STATUSES)[number],
     );
-    return { ok: true };
+    return { ok: true, ...result };
   });
 
 export const updateOrderInternalNoteFn = createServerFn({ method: "POST" })

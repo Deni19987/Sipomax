@@ -7,7 +7,7 @@ import {
   type ShopProduct,
   type WorkshopCampaign,
 } from "@/lib/shop/campaigns";
-import { ORDER_STATUS_LABELS, type ShopOrder } from "@/lib/shop/orders";
+import { ORDER_STATUS_BADGE, ORDER_STATUS_LABELS, type ShopOrder } from "@/lib/shop/orders";
 import { CATEGORY_ICONS } from "@/components/shop/category-icons";
 import { cn } from "@/lib/utils";
 
@@ -101,9 +101,7 @@ export function OrderCard({ order }: { order: ShopOrder }) {
         <span
           className={cn(
             "rounded-md px-2 py-0.5 text-[11px] font-medium",
-            order.status === "levererad"
-              ? "bg-emerald-100 text-emerald-700"
-              : "bg-amber-100 text-amber-700",
+            ORDER_STATUS_BADGE[order.status],
           )}
         >
           {ORDER_STATUS_LABELS[order.status]}

@@ -1,10 +1,13 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useQuery } from "@tanstack/react-query";
-import { FileText, Package } from "lucide-react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { Download, FileText, Package } from "lucide-react";
+import { toast } from "sonner";
 import { ShopShell } from "@/components/shop/ShopShell";
+import { openOrDownloadPdf } from "@/lib/pdf-download";
 import { formatPrice } from "@/lib/shop/catalog";
-import { ORDER_STATUS_LABELS } from "@/lib/shop/orders";
+import { ORDER_STATUS_BADGE, ORDER_STATUS_LABELS, type ShopOrder } from "@/lib/shop/orders";
+import { getMyOrderInvoicePdfFn } from "@/lib/shop-fortnox.functions";
 import { getMyShopOrderFn } from "@/lib/shop-orders.functions";
 import { cn } from "@/lib/utils";
 
@@ -77,9 +80,7 @@ function OrderDetailPage() {
             <span
               className={cn(
                 "rounded-md px-2 py-0.5 text-[11px] font-medium",
-                order.status === "levererad"
-                  ? "bg-emerald-100 text-emerald-700"
-                  : "bg-amber-100 text-amber-700",
+                ORDER_STATUS_BADGE[order.status],
               )}
             >
               {ORDER_STATUS_LABELS[order.status]}
@@ -110,13 +111,66 @@ function OrderDetailPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-3 rounded-xl bg-card p-4 shadow-sm">
-          <FileText className="h-5 w-5 shrink-0 text-primary" />
+        <InvoiceSection order={order} />
+      </div>
+    </ShopShell>
+  );
+}
+
+/**
+ * Fakturan för beställningen. Den skapas i Fortnox när ordern levereras, och
+ * kunden kan öppna och spara PDF:en direkt härifrån.
+ */
+function InvoiceSection({ order }: { order: ShopOrder }) {
+  const fetchPdf = useServerFn(getMyOrderInvoicePdfFn);
+  const invoice = order.invoice;
+
+  const download = useMutation({
+    mutationFn: () => fetchPdf({ data: { orderId: order.id } }),
+    onSuccess: (result) =>
+      openOrDownloadPdf(result.pdfBase64, `Faktura-${result.invoiceId}.pdf`).catch(() =>
+        toast.error("Fakturan kunde inte öppnas."),
+      ),
+    onError: (err) =>
+      toast.error(err instanceof Error ? err.message : "Fakturan kunde inte hämtas."),
+  });
+
+  if (!invoice) {
+    return (
+      <div className="flex items-center gap-3 rounded-xl bg-card p-4 shadow-sm">
+        <FileText className="h-5 w-5 shrink-0 text-primary" />
+        <p className="text-xs text-muted-foreground">
+          Fakturan skapas när beställningen har levererats. Då hittar du den här.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl bg-card p-4 shadow-sm">
+      <div className="flex items-center gap-3">
+        <FileText className="h-5 w-5 shrink-0 text-primary" />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-bold text-card-foreground">Faktura #{invoice.invoiceId}</p>
           <p className="text-xs text-muted-foreground">
-            Fakturan för denna beställning skickas via Fortnox enligt ert avtal med Sipomax.
+            {invoice.paidAt
+              ? "Betald — tack!"
+              : invoice.dueDate
+                ? `Förfaller ${invoice.dueDate}`
+                : "Skickad från Fortnox"}
+            {invoice.total != null ? ` · ${formatPrice(invoice.total)} inkl. moms` : ""}
           </p>
         </div>
       </div>
-    </ShopShell>
+      <button
+        type="button"
+        disabled={download.isPending}
+        onClick={() => download.mutate()}
+        className="mt-3 flex h-11 w-full items-center justify-center gap-1.5 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground transition-opacity disabled:opacity-50"
+      >
+        <Download className="h-4 w-4" />
+        {download.isPending ? "Hämtar faktura…" : "Ladda ner faktura"}
+      </button>
+    </div>
   );
 }

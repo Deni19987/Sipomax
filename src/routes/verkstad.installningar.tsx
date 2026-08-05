@@ -1,19 +1,28 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Building2, Loader2, Trash2, UserPlus, UsersRound } from "lucide-react";
+import { Building2, Loader2, Receipt, Trash2, UserPlus, UsersRound } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/use-auth";
 import { getProfile, updateProfile } from "@/lib/profile.functions";
+import {
+  disconnectShopFortnoxFn,
+  getShopFortnoxAuthorizeUrlFn,
+  getShopFortnoxStatusFn,
+  importFortnoxArticlesFn,
+} from "@/lib/shop-fortnox.functions";
 import { getMyAccountInfo } from "@/lib/shop-orders.functions";
 import { deleteUser, getUserManagement, inviteUser } from "@/lib/users.functions";
 
 export const Route = createFileRoute("/verkstad/installningar")({
   ssr: false,
+  // ?connected=fortnox sätts av Fortnox-callbacken när anslutningen är klar.
+  validateSearch: z.object({ connected: z.string().optional() }),
   component: WorkshopSettingsPage,
 });
 
@@ -31,6 +40,7 @@ function WorkshopSettingsPage() {
       <h1 className="text-lg font-bold text-foreground lg:text-2xl">Inställningar</h1>
       <div className="space-y-4 lg:grid lg:grid-cols-2 lg:items-start lg:gap-4 lg:space-y-0">
         <WorkshopProfileCard />
+        <FortnoxCard />
         <TeamCard isDeveloper={accountInfo?.isDeveloper ?? false} />
       </div>
     </div>
@@ -107,6 +117,154 @@ function WorkshopProfileCard() {
           Spara
         </Button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Fortnox-kopplingen för butiken.
+ *
+ * Anslutningen gör tre saker, i den ordningen: den importerar Fortnox
+ * artikelregister till appens produkter (en gång), speglar därefter nya och
+ * ändrade produkter till Fortnox, och skapar automatiskt fakturan när en order
+ * markeras som levererad.
+ */
+function FortnoxCard() {
+  const search = Route.useSearch();
+  const queryClient = useQueryClient();
+  const fetchStatus = useServerFn(getShopFortnoxStatusFn);
+  const getAuthorizeUrl = useServerFn(getShopFortnoxAuthorizeUrlFn);
+  const disconnect = useServerFn(disconnectShopFortnoxFn);
+  const importArticles = useServerFn(importFortnoxArticlesFn);
+  const [connecting, setConnecting] = useState(false);
+
+  const { data: status, isLoading } = useQuery({
+    queryKey: ["shop-fortnox-status"],
+    queryFn: () => fetchStatus(),
+  });
+
+  const importMutation = useMutation({
+    mutationFn: () => importArticles(),
+    onSuccess: (result) => {
+      if (!result.alreadyDone) {
+        toast.success(
+          result.imported > 0
+            ? `${result.imported} artiklar importerades från Fortnox.`
+            : "Inga nya artiklar att importera från Fortnox.",
+        );
+      }
+      queryClient.invalidateQueries({ queryKey: ["shop-fortnox-status"] });
+      queryClient.invalidateQueries({ queryKey: ["workshop-products"] });
+    },
+    onError: (err) =>
+      toast.error(err instanceof Error ? err.message : "Artiklarna kunde inte importeras."),
+  });
+
+  // Den initiala importen körs så fort en anslutning finns men importen ännu
+  // inte är gjord — oavsett om man just kom tillbaka från Fortnox eller
+  // öppnar sidan senare.
+  const needsImport = !!status?.connected && !status.articleImportAt;
+  useEffect(() => {
+    if (needsImport && !importMutation.isPending && !importMutation.isError) {
+      importMutation.mutate();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [needsImport]);
+
+  useEffect(() => {
+    if (search.connected === "fortnox") toast.success("Fortnox anslutet.");
+  }, [search.connected]);
+
+  const disconnectMutation = useMutation({
+    mutationFn: () => disconnect(),
+    onSuccess: () => {
+      toast.success("Fortnox frånkopplat.");
+      queryClient.invalidateQueries({ queryKey: ["shop-fortnox-status"] });
+    },
+    onError: (err) =>
+      toast.error(err instanceof Error ? err.message : "Fortnox kunde inte kopplas från."),
+  });
+
+  async function connect() {
+    setConnecting(true);
+    try {
+      const { url } = await getAuthorizeUrl();
+      window.location.href = url;
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Anslutningen kunde inte startas.");
+      setConnecting(false);
+    }
+  }
+
+  return (
+    <div className="rounded-xl bg-card p-4 shadow-sm">
+      <h2 className="flex items-center gap-2 text-sm font-bold text-card-foreground">
+        <Receipt className="h-4 w-4 text-primary" /> Fortnox
+      </h2>
+      <p className="mt-1 text-xs text-muted-foreground">
+        När en order markeras som levererad skapas och bokförs fakturan automatiskt i Fortnox med
+        orderns alla artiklar. Så fort fakturan är betald i Fortnox blir ordern avklarad.
+      </p>
+
+      {isLoading ? (
+        <p className="mt-3 text-xs text-muted-foreground">Hämtar status…</p>
+      ) : status?.connected ? (
+        <div className="mt-3 space-y-3">
+          <div className="rounded-lg bg-muted/50 px-3 py-2">
+            <p className="text-sm font-semibold text-card-foreground">Anslutet</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {importMutation.isPending
+                ? "Importerar artiklar från Fortnox…"
+                : status.articleImportAt
+                  ? `Artiklar importerade ${new Date(status.articleImportAt).toLocaleDateString("sv-SE")}. Nya produkter skapas härifrån och synkas till Fortnox.`
+                  : "Artikelimporten är inte gjord ännu."}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {status.syncedProductCount} av {status.productCount} produkter är kopplade till en
+              Fortnox-artikel
+              {status.failedProductCount > 0
+                ? ` · ${status.failedProductCount} misslyckades att synka`
+                : ""}
+              .
+            </p>
+          </div>
+          {importMutation.isError && (
+            <Button
+              variant="outline"
+              className="w-full rounded-full"
+              disabled={importMutation.isPending}
+              onClick={() => importMutation.mutate()}
+            >
+              Försök importera artiklarna igen
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            className="w-full rounded-full"
+            disabled={disconnectMutation.isPending}
+            onClick={() => {
+              if (window.confirm("Koppla från Fortnox? Nya ordrar kommer inte att faktureras.")) {
+                disconnectMutation.mutate();
+              }
+            }}
+          >
+            {disconnectMutation.isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
+            Koppla från Fortnox
+          </Button>
+        </div>
+      ) : (
+        <div className="mt-3 space-y-2">
+          <p className="text-xs text-muted-foreground">
+            Vid anslutningen hämtas alla artiklar som redan finns i Fortnox in som produkter i
+            appen. Därefter skapas nya produkter bara här — artiklar som läggs upp direkt i Fortnox
+            syns inte i appen.
+          </p>
+          <Button onClick={connect} disabled={connecting} className="w-full rounded-full">
+            {connecting && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
+            Anslut Fortnox
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

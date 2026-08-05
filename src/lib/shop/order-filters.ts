@@ -9,10 +9,21 @@
 //  4. Långsvansen (ordervärde, anteckningar, har kommentarer) samlas i en
 //     enda Filter-meny så att grundvyn förblir lugn.
 
-import type { ShopOrder, ShopOrderStatus } from "./orders";
-import { ORDER_STATUSES, ORDER_STATUS_LABELS } from "./orders";
+import type { PaymentStatus, ShopOrder, ShopOrderStatus } from "./orders";
+import {
+  isOrderCompleted,
+  ORDER_STATUS_LABELS,
+  ORDER_STATUSES,
+  PAYMENT_STATUS_LABELS,
+} from "./orders";
 
 // ── Vyer (flikarna) ─────────────────────────────────────────────────────────
+//
+// Flikarna följer arbetet: Alla, Att göra och stegen fram till leverans visar
+// bara pågående ordrar. Avklarade ordrar lämnar det flödet och samlas i sin
+// egen bubbla längst ut — därifrån lever de vidare som färdiga ordrar på
+// kundkortet. En sökning når dem också, så att en gammal order går att slå upp
+// var man än står.
 
 export type OrderView = "alla" | "att-gora" | ShopOrderStatus;
 
@@ -25,18 +36,57 @@ export const ORDER_VIEW_LABELS: Record<OrderView, string> = {
 };
 
 export const ORDER_VIEW_HINTS: Record<OrderView, string> = {
-  alla: "Alla beställningar i verkstaden",
+  alla: "Alla pågående beställningar i verkstaden",
   "att-gora": "Allt som ännu inte är skickat eller levererat",
   mottagen: "Nya beställningar som ingen börjat med",
-  behandlas: "Plockas eller förbereds i verkstaden",
+  packad: "Plockad och packad, redo att skickas",
   skickad: "Skickad eller redo för upphämtning",
-  levererad: "Avslutad och levererad till kund",
+  levererad: "Hos kunden — kan vara obetald, fakturerad eller på väg tillbaka",
+  avklarad: "Klar: betald eller återbetald — ligger som färdig order på kundkortet",
 };
+
+/**
+ * Betalläget är bara en fråga i slutet av flödet, och frågan ser olika ut på
+ * de två ställena:
+ *
+ * - **Levererad**: varorna är hos kunden men affären är inte klar. Här ligger
+ *   det obetalda, det fakturerade och det som ska tillbaka som retur.
+ * - **Avklarad**: affären är stängd, och det kan bara ha hänt på två sätt —
+ *   kunden betalade, eller så fick kunden pengarna tillbaka. Något annat är
+ *   per definition inte avklarat.
+ *
+ * Stegen dessförinnan (mottagen, packad, skickad) har inget att välja mellan
+ * och är därför vanliga flikar.
+ */
+const PAYMENT_MENU_OPTIONS: Partial<Record<OrderView, OrderPayment[]>> = {
+  levererad: ["alla", "obetald", "fakturerad", "retur"],
+  avklarad: ["alla", "betald", "aterbetald"],
+};
+
+export const PAYMENT_MENU_VIEWS = Object.keys(PAYMENT_MENU_OPTIONS) as OrderView[];
+
+export function paymentOptionsForView(view: OrderView): OrderPayment[] | null {
+  return PAYMENT_MENU_OPTIONS[view] ?? null;
+}
 
 function matchesView(order: ShopOrder, view: OrderView): boolean {
   if (view === "alla") return true;
-  if (view === "att-gora") return order.status === "mottagen" || order.status === "behandlas";
+  if (view === "att-gora") return order.status === "mottagen" || order.status === "packad";
   return order.status === view;
+}
+
+/**
+ * Avklarade ordrar syns bara i sin egen bubbla — de ska inte ligga kvar och
+ * skräpa i Alla, Att göra eller stegen fram till leverans. En sökning är
+ * däremot ett uttryckligt "jag letar efter en bestämd order" och når dem
+ * oavsett vilken flik man står på.
+ *
+ * Regeln hör till fliken som utvärderas, inte till den aktiva fliken, så att
+ * Avklarad-bubblan kan visa sitt antal även medan man tittar på Alla.
+ */
+function visibleInView(order: ShopOrder, view: OrderView, filters: OrderFilters): boolean {
+  if (!isOrderCompleted(order)) return true;
+  return view === "avklarad" || !!filters.query.trim();
 }
 
 // ── Period ──────────────────────────────────────────────────────────────────
@@ -60,6 +110,28 @@ function matchesPeriod(order: ShopOrder, period: OrderPeriod, now: Date): boolea
   const cutoff = new Date(now);
   cutoff.setDate(cutoff.getDate() - days);
   return created >= cutoff;
+}
+
+// ── Betalstatus ─────────────────────────────────────────────────────────────
+//
+// En levererad order kan vara obetald, fakturerad, betald eller på väg
+// tillbaka som retur. Därför fälls varje statusflik ut till en liten meny där
+// betalläget går att välja som underfilter.
+
+export type OrderPayment = "alla" | PaymentStatus;
+
+export const ORDER_PAYMENTS: OrderPayment[] = [
+  "alla",
+  ...(Object.keys(PAYMENT_STATUS_LABELS) as PaymentStatus[]),
+];
+
+export const ORDER_PAYMENT_LABELS: Record<OrderPayment, string> = {
+  alla: "Alla betallägen",
+  ...PAYMENT_STATUS_LABELS,
+};
+
+function matchesPayment(order: ShopOrder, payment: OrderPayment): boolean {
+  return payment === "alla" || order.paymentStatus === payment;
 }
 
 // ── Ordervärde ──────────────────────────────────────────────────────────────
@@ -99,6 +171,8 @@ export type OrderFilters = {
   query: string;
   period: OrderPeriod;
   amount: OrderAmount;
+  /** Betalläge inom vyn, valt i statusflikens meny. */
+  payment: OrderPayment;
   /** Bara ordrar med olästa kommentarer. */
   unread: boolean;
   /** Bara ordrar där jag själv blivit taggad. */
@@ -115,6 +189,7 @@ export const DEFAULT_FILTERS: OrderFilters = {
   query: "",
   period: "alla",
   amount: "alla",
+  payment: "alla",
   unread: false,
   mentioned: false,
   commented: false,
@@ -151,6 +226,7 @@ export function matchesRefinements(
   if (!matchesQuery(order, filters.query)) return false;
   if (!matchesPeriod(order, filters.period, now)) return false;
   if (!matchesAmount(order, filters.amount)) return false;
+  if (!matchesPayment(order, filters.payment)) return false;
   if (filters.unread && (order.unreadCount ?? 0) === 0) return false;
   if (filters.mentioned && !order.mentionsMe) return false;
   if (filters.commented && (order.messageCount ?? 0) === 0) return false;
@@ -179,7 +255,10 @@ export function filterOrders(
   now: Date = new Date(),
 ): ShopOrder[] {
   const matched = orders.filter(
-    (order) => matchesView(order, filters.view) && matchesRefinements(order, filters, now),
+    (order) =>
+      matchesView(order, filters.view) &&
+      visibleInView(order, filters.view, filters) &&
+      matchesRefinements(order, filters, now),
   );
   return sortOrders(matched, filters.sort);
 }
@@ -197,8 +276,34 @@ export function countByView(
   for (const order of orders) {
     if (!matchesRefinements(order, filters, now)) continue;
     for (const view of ORDER_VIEWS) {
-      if (matchesView(order, view)) counts[view] += 1;
+      if (matchesView(order, view) && visibleInView(order, view, filters)) counts[view] += 1;
     }
+  }
+  return counts;
+}
+
+/**
+ * Antal per betalläge inom en vy, räknat mot de övriga filtren men utan det
+ * aktiva betalfiltret — annars skulle menyn bara visa noll för alla andra
+ * alternativ än det man redan valt.
+ */
+export function countByPayment(
+  orders: ShopOrder[],
+  filters: OrderFilters,
+  view: OrderView,
+  now: Date = new Date(),
+): Record<OrderPayment, number> {
+  const counts = Object.fromEntries(ORDER_PAYMENTS.map((p) => [p, 0])) as Record<
+    OrderPayment,
+    number
+  >;
+  const base = { ...filters, payment: "alla" as OrderPayment };
+  for (const order of orders) {
+    if (!matchesView(order, view)) continue;
+    if (!visibleInView(order, view, filters)) continue;
+    if (!matchesRefinements(order, base, now)) continue;
+    counts.alla += 1;
+    counts[order.paymentStatus] += 1;
   }
   return counts;
 }
@@ -218,6 +323,9 @@ export function activeFilterChips(filters: OrderFilters): FilterChipInfo[] {
   }
   if (filters.amount !== "alla") {
     chips.push({ key: "amount", label: ORDER_AMOUNT_LABELS[filters.amount] });
+  }
+  if (filters.payment !== "alla") {
+    chips.push({ key: "payment", label: ORDER_PAYMENT_LABELS[filters.payment] });
   }
   if (filters.unread) chips.push({ key: "unread", label: "Olästa kommentarer" });
   if (filters.mentioned) chips.push({ key: "mentioned", label: "Jag är taggad" });

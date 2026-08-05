@@ -25,7 +25,12 @@ export const Route = createFileRoute("/api/public/fortnox/callback")({
           await storeFortnoxTokens(payload.userId, tokens);
           // Connecting Fortnox activates it as the user's invoice integration.
           await setInvoiceProvider(payload.userId, "fortnox");
-          return Response.redirect(`${origin}/settings?connected=fortnox`, 302);
+          // The shop app and the workshop CRM have different settings pages;
+          // the return path travels inside the signed state. Only in-app paths
+          // are accepted, so a tampered state can never redirect off-site.
+          const returnTo =
+            payload.returnTo && /^\/[^/\\]/.test(payload.returnTo) ? payload.returnTo : "/settings";
+          return Response.redirect(`${origin}${returnTo}?connected=fortnox`, 302);
         } catch (e: any) {
           return Response.redirect(
             `${origin}/settings?error=${encodeURIComponent(e?.message ?? "Fortnox callback failed")}`,

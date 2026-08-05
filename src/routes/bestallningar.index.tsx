@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Package } from "lucide-react";
 import { OrderCard } from "@/components/shop/cards";
 import { ShopShell } from "@/components/shop/ShopShell";
+import { isOrderCompleted, type ShopOrder } from "@/lib/shop/orders";
 import { listMyShopOrdersFn } from "@/lib/shop-orders.functions";
 
 export const Route = createFileRoute("/bestallningar/")({
@@ -26,7 +27,7 @@ function OrdersPage() {
             <p className="text-sm text-muted-foreground">Laddar beställningar…</p>
           </div>
         ) : orders && orders.length > 0 ? (
-          orders.map((order) => <OrderCard key={order.id} order={order} />)
+          <OrderSections orders={orders} />
         ) : (
           <div className="rounded-xl bg-card p-8 text-center shadow-sm">
             <Package className="mx-auto h-10 w-10 text-muted-foreground" />
@@ -47,5 +48,34 @@ function OrdersPage() {
         )}
       </div>
     </ShopShell>
+  );
+}
+
+/**
+ * Pågående beställningar först — det är dem man kommer hit för att kolla på.
+ * Avslutade ordrar (levererade och betalda, eller returnerade och återbetalda)
+ * ligger kvar längre ned som kundens egen historik.
+ */
+function OrderSections({ orders }: { orders: ShopOrder[] }) {
+  const ongoing = orders.filter((order) => !isOrderCompleted(order));
+  const finished = orders.filter(isOrderCompleted);
+
+  return (
+    <>
+      {ongoing.map((order) => (
+        <OrderCard key={order.id} order={order} />
+      ))}
+
+      {finished.length > 0 && (
+        <>
+          <p className="px-1 pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Avslutade
+          </p>
+          {finished.map((order) => (
+            <OrderCard key={order.id} order={order} />
+          ))}
+        </>
+      )}
+    </>
   );
 }

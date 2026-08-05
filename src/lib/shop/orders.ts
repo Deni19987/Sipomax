@@ -1,38 +1,68 @@
 // Delade ordertyper för butiken (kundvyn) och verkstadsvyn.
 // Själva datat bor i backend-tabellerna shop_orders / shop_order_lines.
 
-export type ShopOrderStatus = "mottagen" | "behandlas" | "skickad" | "levererad";
+export type ShopOrderStatus = "mottagen" | "packad" | "skickad" | "levererad" | "avklarad";
 
 export const ORDER_STATUS_LABELS: Record<ShopOrderStatus, string> = {
   mottagen: "Mottagen",
-  behandlas: "Behandlas",
+  packad: "Packad",
   skickad: "Skickad",
   levererad: "Levererad",
+  avklarad: "Avklarad",
 };
 
 export const ORDER_STATUSES = Object.keys(ORDER_STATUS_LABELS) as ShopOrderStatus[];
 
+/**
+ * Stegen ordern rör sig genom medan verkstaden jobbar med den. "Avklarad" är
+ * inte ett steg i arbetet utan slutet på det: då är ordern antingen levererad
+ * och betald, eller returnerad och återbetald. En avklarad order lämnar
+ * verkstadens orderlista och lever vidare som en färdig order på kundkortet.
+ */
+export const ACTIVE_ORDER_STATUSES = ORDER_STATUSES.filter(
+  (status) => status !== "avklarad",
+) as ShopOrderStatus[];
+
+export function isOrderCompleted(order: { status: ShopOrderStatus }): boolean {
+  return order.status === "avklarad";
+}
+
+/**
+ * En order kan bara bli avklarad när pengarna landat åt något av två håll:
+ * kunden har betalat, eller så har kunden fått tillbaka pengarna. Är den
+ * varken betald eller återbetald är affären inte klar — då stannar ordern kvar
+ * som levererad, oavsett vad någon klickar på.
+ */
+export const COMPLETING_PAYMENT_STATUSES: PaymentStatus[] = ["betald", "aterbetald"];
+
+export function canCompleteOrder(order: { paymentStatus: PaymentStatus }): boolean {
+  return COMPLETING_PAYMENT_STATUSES.includes(order.paymentStatus);
+}
+
 // Kort beskrivning av vad varje steg i flödet innebär — visas i orderöversikten.
 export const ORDER_STATUS_HINTS: Record<ShopOrderStatus, string> = {
   mottagen: "Nya beställningar som ingen börjat med",
-  behandlas: "Plockas eller förbereds i verkstaden",
+  packad: "Plockad och packad, redo att skickas",
   skickad: "Skickad eller redo för upphämtning",
-  levererad: "Avslutad och levererad till kund",
+  levererad: "Levererad till kund — faktura skapad, väntar på betalning",
+  avklarad: "Fakturan är betald i Fortnox och ordern är klar",
 };
 
 // Tailwind-klasser per status. Används för både chips och badges.
 export const ORDER_STATUS_BADGE: Record<ShopOrderStatus, string> = {
   mottagen: "bg-amber-100 text-amber-700",
-  behandlas: "bg-sky-100 text-sky-700",
+  packad: "bg-sky-100 text-sky-700",
   skickad: "bg-violet-100 text-violet-700",
-  levererad: "bg-emerald-100 text-emerald-700",
+  levererad: "bg-teal-100 text-teal-700",
+  avklarad: "bg-emerald-100 text-emerald-700",
 };
 
 export const ORDER_STATUS_DOT: Record<ShopOrderStatus, string> = {
   mottagen: "bg-amber-500",
-  behandlas: "bg-sky-500",
+  packad: "bg-sky-500",
   skickad: "bg-violet-500",
-  levererad: "bg-emerald-500",
+  levererad: "bg-teal-500",
+  avklarad: "bg-emerald-500",
 };
 
 // Nästa steg i flödet, eller null när ordern är klar. Status flyttas bara
@@ -56,7 +86,10 @@ export type OrderEventType =
   | "note_updated"
   | "comment"
   | "payment_changed"
-  | "shipping_updated";
+  | "shipping_updated"
+  | "invoice_created"
+  | "invoice_failed"
+  | "invoice_paid";
 
 export interface OrderEvent {
   id: string;
@@ -87,17 +120,24 @@ export function describeOrderEvent(event: OrderEvent): string {
       return `${who} ändrade betalstatus till ${event.detail ?? "okänd"}`;
     case "shipping_updated":
       return `${who} uppdaterade frakt och leveransadress`;
+    case "invoice_created":
+      return `Faktura ${event.detail ?? ""} skapades i Fortnox`.trim();
+    case "invoice_failed":
+      return `Fakturan kunde inte skapas i Fortnox: ${event.detail ?? "okänt fel"}`;
+    case "invoice_paid":
+      return `Fakturan ${event.detail ?? ""} betalades i Fortnox`.trim();
   }
 }
 
 // ── Betalning ───────────────────────────────────────────────────────────────
 
-export type PaymentStatus = "obetald" | "betald" | "fakturerad" | "aterbetald";
+export type PaymentStatus = "obetald" | "betald" | "fakturerad" | "retur" | "aterbetald";
 
 export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
   obetald: "Obetald",
   betald: "Betald",
   fakturerad: "Fakturerad",
+  retur: "Retur",
   aterbetald: "Återbetald",
 };
 
@@ -107,7 +147,18 @@ export const PAYMENT_STATUS_BADGE: Record<PaymentStatus, string> = {
   obetald: "bg-rose-100 text-rose-700",
   betald: "bg-emerald-100 text-emerald-700",
   fakturerad: "bg-sky-100 text-sky-700",
+  retur: "bg-orange-100 text-orange-700",
   aterbetald: "bg-neutral-200 text-neutral-700",
+};
+
+// Kort förklaring till varje betalstatus — visas i menyn som fälls ut när man
+// klickar på en statusflik i orderlistan.
+export const PAYMENT_STATUS_HINTS: Record<PaymentStatus, string> = {
+  obetald: "Ingen faktura är betald ännu",
+  betald: "Fakturan är betald i Fortnox",
+  fakturerad: "Faktura skapad i Fortnox, väntar på betalning",
+  retur: "Varorna är på väg tillbaka",
+  aterbetald: "Pengarna är återbetalda till kunden",
 };
 
 // ── Frakt ───────────────────────────────────────────────────────────────────
@@ -192,6 +243,30 @@ export interface ShopOrderLine {
   quantity: number;
 }
 
+// ── Faktura (Fortnox) ───────────────────────────────────────────────────────
+
+/**
+ * Fakturan som skapats i Fortnox för ordern. Samma uppgifter visas för
+ * verkstaden och för kunden — kunden ser dem när hen öppnar sin beställning.
+ */
+export interface OrderInvoice {
+  /** Fortnox fakturanummer (DocumentNumber). */
+  invoiceId: string;
+  createdAt: string | null;
+  dueDate: string | null;
+  total: number | null;
+  /** Kvarvarande belopp i Fortnox. 0 = fullt betald. */
+  balance: number | null;
+  booked: boolean;
+  paidAt: string | null;
+}
+
+export function invoiceStateLabel(invoice: OrderInvoice): string {
+  if (invoice.paidAt) return "Betald";
+  if (invoice.booked) return "Bokförd — väntar på betalning";
+  return "Skapad i Fortnox";
+}
+
 export interface ShopOrder {
   id: string;
   orderNumber: number;
@@ -211,6 +286,10 @@ export interface ShopOrder {
   trackingNumber: string | null;
   /** Kundens leveransinstruktion från kassan. */
   deliveryNote: string | null;
+  /** Fortnox-fakturan, satt så fort ordern markerats som levererad. */
+  invoice: OrderInvoice | null;
+  /** Senaste felet från fakturaskapandet, bara satt i verkstadsvyn. */
+  invoiceError?: string | null;
   // Verkstadsintern info — bara satt i verkstadsvyn.
   internalNote?: string | null;
   messageCount?: number;

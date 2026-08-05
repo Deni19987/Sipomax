@@ -17,6 +17,12 @@ export interface WorkshopProduct {
   imageUrl: string | null;
   status: ProductStatus;
   updatedAt: string;
+  /** Artikelnumret produkten fått i Fortnox, när Fortnox är anslutet. */
+  fortnoxArticleNumber: string | null;
+  /** Senaste felet vid synk till Fortnox, annars null. */
+  fortnoxSyncError: string | null;
+  /** 'app' = skapad här, 'fortnox' = hämtad vid den initiala importen. */
+  source: "app" | "fortnox";
 }
 
 // Utseendet kundappen förväntar sig (samma form som den statiska katalogen).
