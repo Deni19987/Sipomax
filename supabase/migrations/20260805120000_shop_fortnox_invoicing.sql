@@ -30,6 +30,14 @@ CREATE INDEX IF NOT EXISTS shop_orders_invoice_idx
   ON public.shop_orders (workshop_id, status)
   WHERE fortnox_invoice_id IS NOT NULL;
 
+-- Databasen har historiskt burit statusen 'packad' där appen säger 'behandlas'
+-- (appens ShopOrderStatus har aldrig känt till 'packad', så de ordrarna visas
+-- i dag utan statusetikett). Vi normaliserar dem innan det nya villkoret
+-- sätts, annars faller ALTER TABLE på de befintliga raderna.
+UPDATE public.shop_orders SET status = 'behandlas' WHERE status = 'packad';
+UPDATE public.shop_order_events SET from_status = 'behandlas' WHERE from_status = 'packad';
+UPDATE public.shop_order_events SET to_status = 'behandlas' WHERE to_status = 'packad';
+
 -- "avklarad" = fakturan är betald i Fortnox och ordern är helt klar.
 ALTER TABLE public.shop_orders DROP CONSTRAINT IF EXISTS shop_orders_status_check;
 ALTER TABLE public.shop_orders
