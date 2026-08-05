@@ -21,8 +21,9 @@ import { deleteUser, getUserManagement, inviteUser } from "@/lib/users.functions
 
 export const Route = createFileRoute("/verkstad/installningar")({
   ssr: false,
-  // ?connected=fortnox sätts av Fortnox-callbacken när anslutningen är klar.
-  validateSearch: z.object({ connected: z.string().optional() }),
+  // Fortnox-callbacken skickar tillbaka hit: ?connected=fortnox när det gick
+  // vägen, ?error=... när Fortnox avvisade försöket.
+  validateSearch: z.object({ connected: z.string().optional(), error: z.string().optional() }),
   component: WorkshopSettingsPage,
 });
 
@@ -173,7 +174,13 @@ function FortnoxCard() {
 
   useEffect(() => {
     if (search.connected === "fortnox") toast.success("Fortnox anslutet.");
-  }, [search.connected]);
+    // Felet från Fortnox visas i klartext — "invalid_scope: An unsupported
+    // scope was requested" pekar direkt på vad som saknas i integrationen,
+    // vilket en tyst omdirigering aldrig hade gjort.
+    if (search.error) {
+      toast.error(`Fortnox nekade anslutningen: ${search.error}`, { duration: 12_000 });
+    }
+  }, [search.connected, search.error]);
 
   const disconnectMutation = useMutation({
     mutationFn: () => disconnect(),
