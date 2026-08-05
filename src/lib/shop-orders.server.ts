@@ -741,7 +741,7 @@ export async function getWorkshopStats(userId: string): Promise<WorkshopStats> {
 
   const statusCounts: Record<ShopOrderStatus, number> = {
     mottagen: 0,
-    behandlas: 0,
+    packad: 0,
     skickad: 0,
     levererad: 0,
     avklarad: 0,

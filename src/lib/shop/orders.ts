@@ -1,11 +1,11 @@
 // Delade ordertyper för butiken (kundvyn) och verkstadsvyn.
 // Själva datat bor i backend-tabellerna shop_orders / shop_order_lines.
 
-export type ShopOrderStatus = "mottagen" | "behandlas" | "skickad" | "levererad" | "avklarad";
+export type ShopOrderStatus = "mottagen" | "packad" | "skickad" | "levererad" | "avklarad";
 
 export const ORDER_STATUS_LABELS: Record<ShopOrderStatus, string> = {
   mottagen: "Mottagen",
-  behandlas: "Behandlas",
+  packad: "Packad",
   skickad: "Skickad",
   levererad: "Levererad",
   avklarad: "Avklarad",
@@ -16,7 +16,7 @@ export const ORDER_STATUSES = Object.keys(ORDER_STATUS_LABELS) as ShopOrderStatu
 // Kort beskrivning av vad varje steg i flödet innebär — visas i orderöversikten.
 export const ORDER_STATUS_HINTS: Record<ShopOrderStatus, string> = {
   mottagen: "Nya beställningar som ingen börjat med",
-  behandlas: "Plockas eller förbereds i verkstaden",
+  packad: "Plockad och packad, redo att skickas",
   skickad: "Skickad eller redo för upphämtning",
   levererad: "Levererad till kund — faktura skapad, väntar på betalning",
   avklarad: "Fakturan är betald i Fortnox och ordern är klar",
@@ -25,7 +25,7 @@ export const ORDER_STATUS_HINTS: Record<ShopOrderStatus, string> = {
 // Tailwind-klasser per status. Används för både chips och badges.
 export const ORDER_STATUS_BADGE: Record<ShopOrderStatus, string> = {
   mottagen: "bg-amber-100 text-amber-700",
-  behandlas: "bg-sky-100 text-sky-700",
+  packad: "bg-sky-100 text-sky-700",
   skickad: "bg-violet-100 text-violet-700",
   levererad: "bg-teal-100 text-teal-700",
   avklarad: "bg-emerald-100 text-emerald-700",
@@ -33,7 +33,7 @@ export const ORDER_STATUS_BADGE: Record<ShopOrderStatus, string> = {
 
 export const ORDER_STATUS_DOT: Record<ShopOrderStatus, string> = {
   mottagen: "bg-amber-500",
-  behandlas: "bg-sky-500",
+  packad: "bg-sky-500",
   skickad: "bg-violet-500",
   levererad: "bg-teal-500",
   avklarad: "bg-emerald-500",

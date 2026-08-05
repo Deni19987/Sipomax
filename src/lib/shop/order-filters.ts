@@ -28,7 +28,7 @@ export const ORDER_VIEW_HINTS: Record<OrderView, string> = {
   alla: "Alla beställningar i verkstaden",
   "att-gora": "Allt som ännu inte är skickat eller levererat",
   mottagen: "Nya beställningar som ingen börjat med",
-  behandlas: "Plockas eller förbereds i verkstaden",
+  packad: "Plockad och packad, redo att skickas",
   skickad: "Skickad eller redo för upphämtning",
   levererad: "Levererad till kund — faktura skapad, väntar på betalning",
   avklarad: "Fakturan är betald i Fortnox och ordern är klar",
@@ -36,7 +36,7 @@ export const ORDER_VIEW_HINTS: Record<OrderView, string> = {
 
 function matchesView(order: ShopOrder, view: OrderView): boolean {
   if (view === "alla") return true;
-  if (view === "att-gora") return order.status === "mottagen" || order.status === "behandlas";
+  if (view === "att-gora") return order.status === "mottagen" || order.status === "packad";
   return order.status === view;
 }
 

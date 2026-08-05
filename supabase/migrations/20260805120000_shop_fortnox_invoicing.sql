@@ -30,19 +30,18 @@ CREATE INDEX IF NOT EXISTS shop_orders_invoice_idx
   ON public.shop_orders (workshop_id, status)
   WHERE fortnox_invoice_id IS NOT NULL;
 
--- Databasen har historiskt burit statusen 'packad' där appen säger 'behandlas'
--- (appens ShopOrderStatus har aldrig känt till 'packad', så de ordrarna visas
--- i dag utan statusetikett). Vi normaliserar dem innan det nya villkoret
--- sätts, annars faller ALTER TABLE på de befintliga raderna.
-UPDATE public.shop_orders SET status = 'behandlas' WHERE status = 'packad';
-UPDATE public.shop_order_events SET from_status = 'behandlas' WHERE from_status = 'packad';
-UPDATE public.shop_order_events SET to_status = 'behandlas' WHERE to_status = 'packad';
+-- Steg två i flödet heter 'packad' — det är namnet databasen alltid burit och
+-- som appen nu använder rakt igenom. En tidigare migration införde 'behandlas'
+-- som synonym; de raderna döps om så att bara ett namn finns kvar.
+UPDATE public.shop_orders SET status = 'packad' WHERE status = 'behandlas';
+UPDATE public.shop_order_events SET from_status = 'packad' WHERE from_status = 'behandlas';
+UPDATE public.shop_order_events SET to_status = 'packad' WHERE to_status = 'behandlas';
 
 -- "avklarad" = fakturan är betald i Fortnox och ordern är helt klar.
 ALTER TABLE public.shop_orders DROP CONSTRAINT IF EXISTS shop_orders_status_check;
 ALTER TABLE public.shop_orders
   ADD CONSTRAINT shop_orders_status_check
-  CHECK (status IN ('mottagen', 'behandlas', 'skickad', 'levererad', 'avklarad'));
+  CHECK (status IN ('mottagen', 'packad', 'skickad', 'levererad', 'avklarad'));
 
 -- "retur" = varan är på väg tillbaka, ordern ska inte betalas som den ligger.
 ALTER TABLE public.shop_orders DROP CONSTRAINT IF EXISTS shop_orders_payment_status_check;
