@@ -13,6 +13,32 @@ export const ORDER_STATUS_LABELS: Record<ShopOrderStatus, string> = {
 
 export const ORDER_STATUSES = Object.keys(ORDER_STATUS_LABELS) as ShopOrderStatus[];
 
+/**
+ * Stegen ordern rör sig genom medan verkstaden jobbar med den. "Avklarad" är
+ * inte ett steg i arbetet utan slutet på det: då är ordern antingen levererad
+ * och betald, eller returnerad och återbetald. En avklarad order lämnar
+ * verkstadens orderlista och lever vidare som en färdig order på kundkortet.
+ */
+export const ACTIVE_ORDER_STATUSES = ORDER_STATUSES.filter(
+  (status) => status !== "avklarad",
+) as ShopOrderStatus[];
+
+export function isOrderCompleted(order: { status: ShopOrderStatus }): boolean {
+  return order.status === "avklarad";
+}
+
+/**
+ * En order kan bara bli avklarad när pengarna landat åt något av två håll:
+ * kunden har betalat, eller så har kunden fått tillbaka pengarna. Är den
+ * varken betald eller återbetald är affären inte klar — då stannar ordern kvar
+ * som levererad, oavsett vad någon klickar på.
+ */
+export const COMPLETING_PAYMENT_STATUSES: PaymentStatus[] = ["betald", "aterbetald"];
+
+export function canCompleteOrder(order: { paymentStatus: PaymentStatus }): boolean {
+  return COMPLETING_PAYMENT_STATUSES.includes(order.paymentStatus);
+}
+
 // Kort beskrivning av vad varje steg i flödet innebär — visas i orderöversikten.
 export const ORDER_STATUS_HINTS: Record<ShopOrderStatus, string> = {
   mottagen: "Nya beställningar som ingen börjat med",

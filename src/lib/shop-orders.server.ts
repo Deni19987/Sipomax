@@ -31,7 +31,7 @@ import type {
   ShopOrder,
   ShopOrderStatus,
 } from "./shop/orders";
-import { PAYMENT_STATUS_LABELS } from "./shop/orders";
+import { canCompleteOrder, PAYMENT_STATUS_LABELS } from "./shop/orders";
 
 // De nya butiks-tabellerna finns ännu inte i den plattformsgenererade
 // Database-typen (src/integrations/supabase/types.ts får inte redigeras),
@@ -548,23 +548,60 @@ export async function updateOrderPaymentStatus(
   paymentStatus: PaymentStatus,
 ): Promise<void> {
   const workshopId = await assertWorkshopAccount(userId);
+  const { data: current } = await admin
+    .from("shop_orders")
+    .select("status")
+    .eq("id", orderId)
+    .eq("workshop_id", workshopId)
+    .maybeSingle();
+  const fromStatus = (current?.status ?? null) as ShopOrderStatus | null;
+
+  // En order tar slut åt två håll. Betald och levererad är det ena, återbetald
+  // det andra — pengarna är tillbaka hos kunden och det finns inget mer att
+  // göra. Båda gör ordern avklarad, och då lämnar den verkstadens flöde.
+  const finished =
+    paymentStatus === "aterbetald" || (paymentStatus === "betald" && fromStatus === "levererad");
+
+  // ...och omvänt: sätts betalläget tillbaka till något som inte är avslutat
+  // (obetald, fakturerad, retur) var ordern inte klar. Då öppnas den igen som
+  // levererad i stället för att ligga kvar som avklarad med fel betalläge.
+  const reopened = !finished && fromStatus === "avklarad";
+
   const { data, error } = await admin
     .from("shop_orders")
-    .update({ payment_status: paymentStatus })
+    .update({
+      payment_status: paymentStatus,
+      ...(finished && fromStatus !== "avklarad"
+        ? { status: "avklarad", completed_at: new Date().toISOString() }
+        : {}),
+      ...(reopened ? { status: "levererad", completed_at: null } : {}),
+    })
     .eq("id", orderId)
     .eq("workshop_id", workshopId)
     .select("id");
   if (error) throw new Error(error.message);
   if (!data?.length) throw new Error("Beställningen kunde inte hittas.");
 
+  const actorName = await actorNameFor(userId);
   await logOrderEvent({
     orderId,
     workshopId,
     actorId: userId,
-    actorName: await actorNameFor(userId),
+    actorName,
     type: "payment_changed",
     detail: PAYMENT_STATUS_LABELS[paymentStatus],
   });
+  if ((finished && fromStatus !== "avklarad") || reopened) {
+    await logOrderEvent({
+      orderId,
+      workshopId,
+      actorId: userId,
+      actorName,
+      type: "status_changed",
+      fromStatus,
+      toStatus: reopened ? "levererad" : "avklarad",
+    });
+  }
 }
 
 export type ShippingInput = ShippingAddress & {
@@ -667,15 +704,27 @@ export async function updateShopOrderStatus(
   const workshopId = await assertWorkshopAccount(userId);
   const { data: current } = await admin
     .from("shop_orders")
-    .select("status")
+    .select("status, payment_status")
     .eq("id", orderId)
     .eq("workshop_id", workshopId)
     .maybeSingle();
   const fromStatus = (current?.status ?? null) as ShopOrderStatus | null;
+  const paymentStatus = (current?.payment_status ?? "obetald") as PaymentStatus;
+
+  // Avklarad betyder att affären är stängd — det kräver att pengarna landat,
+  // antingen som betalning eller som återbetalning.
+  if (status === "avklarad" && !canCompleteOrder({ paymentStatus })) {
+    throw new Error(
+      "Ordern kan bli avklarad först när fakturan är betald eller återbetald i Fortnox.",
+    );
+  }
 
   const { data, error } = await admin
     .from("shop_orders")
-    .update({ status })
+    .update({
+      status,
+      ...(status === "avklarad" ? { completed_at: new Date().toISOString() } : {}),
+    })
     .eq("id", orderId)
     .eq("workshop_id", workshopId)
     .select("id");

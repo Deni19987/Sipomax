@@ -61,6 +61,8 @@ import {
   ORDER_AMOUNT_LABELS,
   ORDER_PAYMENTS,
   ORDER_PAYMENT_LABELS,
+  PAYMENT_MENU_VIEWS,
+  paymentOptionsForView,
   ORDER_PERIODS,
   ORDER_PERIOD_LABELS,
   ORDER_SORTS,
@@ -96,7 +98,9 @@ import {
   describeOrderEvent,
   formatAddressLines,
   getCarrier,
+  canCompleteOrder,
   invoiceStateLabel,
+  isOrderCompleted,
   nextOrderStatus,
   previousOrderStatus,
   trackingLink,
@@ -269,12 +273,16 @@ function OrderBoard({
   const paymentCounts = useMemo(
     () =>
       Object.fromEntries(
-        ORDER_VIEWS.map((view) => [view, countByPayment(all, filters, view)]),
+        PAYMENT_MENU_VIEWS.map((view) => [view, countByPayment(all, filters, view)]),
       ) as Record<OrderView, Record<OrderPayment, number>>,
     [all, filters],
   );
   const visible = useMemo(() => filterOrders(all, filters), [all, filters]);
   const chips = activeFilterChips(filters);
+  // Avklarade ordrar räknas inte som verkstadens jobb längre — de lever på
+  // kundkortet och nämns bara som en fotnot under listan.
+  const active = useMemo(() => all.filter((order) => !isOrderCompleted(order)), [all]);
+  const completedCount = all.length - active.length;
 
   const unreadTotal = all.reduce((sum, o) => sum + (o.unreadCount ?? 0), 0);
   const mentionTotal = all.filter((o) => o.mentionsMe).length;
@@ -324,6 +332,7 @@ function OrderBoard({
             dot={view in ORDER_STATUS_DOT ? ORDER_STATUS_DOT[view as ShopOrderStatus] : undefined}
             active={filters.view === view}
             payment={filters.payment}
+            paymentOptions={paymentOptionsForView(view)}
             paymentCounts={paymentCounts[view]}
             onSelect={(payment) => setFilters({ view, payment })}
           />
@@ -451,7 +460,9 @@ function OrderBoard({
           <OrderListHeader />
           <OrderRows orders={visible} sort={filters.sort} />
           <div className="border-t border-border px-4 py-2 text-[11px] text-muted-foreground">
-            Visar {visible.length} av {all.length} beställningar
+            {filters.view === "avklarad"
+              ? `Visar ${visible.length} av ${completedCount} avklarade beställningar`
+              : `Visar ${visible.length} av ${active.length} pågående beställningar`}
             {filters.view !== "alla" ? ` · ${ORDER_VIEW_HINTS[filters.view]}` : ""}
           </div>
         </div>
@@ -459,14 +470,14 @@ function OrderBoard({
         <div className="rounded-xl bg-card p-8 text-center shadow-sm">
           <Package className="mx-auto h-10 w-10 text-muted-foreground" />
           <p className="mt-3 text-sm font-semibold text-card-foreground">
-            {all.length > 0 ? "Inga träffar" : "Inga beställningar ännu"}
+            {active.length > 0 ? "Inga träffar" : "Inga pågående beställningar"}
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            {all.length > 0
+            {active.length > 0
               ? "Ingen beställning matchar filtren just nu."
               : "När kunder skickar beställningar i butiken dyker de upp här."}
           </p>
-          {all.length > 0 && (
+          {active.length > 0 && (
             <button
               type="button"
               onClick={() => setFilters({ ...clearRefinements(filters), view: "alla" })}
@@ -496,6 +507,7 @@ function ViewTab({
   dot,
   active,
   payment,
+  paymentOptions,
   paymentCounts,
   onSelect,
 }: {
@@ -505,18 +517,37 @@ function ViewTab({
   dot?: string;
   active: boolean;
   payment: OrderPayment;
-  paymentCounts: Record<OrderPayment, number>;
+  /** Betallägen fliken kan filtreras på, eller null när fliken saknar meny. */
+  paymentOptions: OrderPayment[] | null;
+  paymentCounts?: Record<OrderPayment, number>;
   onSelect: (payment: OrderPayment) => void;
 }) {
+  const shell = cn(
+    "flex h-10 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-sm font-medium transition-colors lg:h-8 lg:text-xs",
+    active ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground shadow-sm",
+  );
+  const badge = cn(
+    "rounded-full px-1.5 text-[11px] font-semibold",
+    active ? "bg-primary-foreground/20" : "bg-muted",
+  );
+
+  // Stegen före leverans har ingen betalfråga att svara på — de är vanliga
+  // flikar. Först när ordern är levererad blir "hur ligger den till?" en riktig
+  // fråga, och då fälls fliken ut till en meny.
+  if (!paymentOptions || !paymentCounts) {
+    return (
+      <button type="button" onClick={() => onSelect("alla")} className={shell}>
+        {dot && <span className={cn("h-1.5 w-1.5 rounded-full", dot)} />}
+        {label}
+        <span className={badge}>{count}</span>
+      </button>
+    );
+  }
+
   const activePayment = active ? payment : "alla";
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger
-        className={cn(
-          "flex h-10 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-sm font-medium transition-colors lg:h-8 lg:text-xs",
-          active ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground shadow-sm",
-        )}
-      >
+      <DropdownMenuTrigger className={shell}>
         {dot && <span className={cn("h-1.5 w-1.5 rounded-full", dot)} />}
         {label}
         {active && payment !== "alla" && (
@@ -524,14 +555,7 @@ function ViewTab({
             · {ORDER_PAYMENT_LABELS[payment]}
           </span>
         )}
-        <span
-          className={cn(
-            "rounded-full px-1.5 text-[11px] font-semibold",
-            active ? "bg-primary-foreground/20" : "bg-muted",
-          )}
-        >
-          {count}
-        </span>
+        <span className={badge}>{count}</span>
         <ChevronDown className="h-3 w-3 opacity-70" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-64">
@@ -543,7 +567,7 @@ function ViewTab({
           value={activePayment}
           onValueChange={(value) => onSelect(value as OrderPayment)}
         >
-          {ORDER_PAYMENTS.map((option) => (
+          {paymentOptions.map((option) => (
             <DropdownMenuRadioItem
               key={option}
               value={option}
@@ -851,7 +875,12 @@ function OrderDetail({
     );
   }
 
-  const next = nextOrderStatus(order.status);
+  // Sista steget är inte verkstadens att ta: en order blir avklarad när
+  // pengarna landat (Fortnox stämmer av betalningen) eller när den återbetalats.
+  // Tills dess visas ingen knapp, bara en förklaring till vad som saknas.
+  const nextInFlow = nextOrderStatus(order.status);
+  const awaitingSettlement = nextInFlow === "avklarad" && !canCompleteOrder(order);
+  const next = awaitingSettlement ? null : nextInFlow;
   const previous = previousOrderStatus(order.status);
 
   return (
@@ -905,6 +934,10 @@ function OrderDetail({
               {ORDER_STATUS_LABELS[next]}
               <ArrowRight className="h-4 w-4" />
             </button>
+          ) : awaitingSettlement ? (
+            <span className="flex h-12 flex-1 items-center justify-center rounded-xl bg-muted px-4 text-center text-sm font-semibold text-muted-foreground lg:h-9 lg:rounded-lg lg:text-xs lg:flex-none">
+              Väntar på betalning
+            </span>
           ) : (
             <span className="flex h-12 flex-1 items-center justify-center rounded-xl bg-emerald-100 px-4 text-base font-semibold text-emerald-700 lg:h-9 lg:rounded-lg lg:text-sm lg:flex-none">
               Klar

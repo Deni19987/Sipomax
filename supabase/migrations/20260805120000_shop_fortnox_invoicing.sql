@@ -43,6 +43,14 @@ ALTER TABLE public.shop_orders
   ADD CONSTRAINT shop_orders_status_check
   CHECK (status IN ('mottagen', 'packad', 'skickad', 'levererad', 'avklarad'));
 
+-- En avklarad order är per definition uppgjord: kunden har antingen betalat
+-- eller fått pengarna tillbaka. Något annat betalläge på en avklarad order
+-- vore en självmotsägelse, så databasen vaktar det.
+ALTER TABLE public.shop_orders DROP CONSTRAINT IF EXISTS shop_orders_completed_payment_check;
+ALTER TABLE public.shop_orders
+  ADD CONSTRAINT shop_orders_completed_payment_check
+  CHECK (status <> 'avklarad' OR payment_status IN ('betald', 'aterbetald'));
+
 -- "retur" = varan är på väg tillbaka, ordern ska inte betalas som den ligger.
 ALTER TABLE public.shop_orders DROP CONSTRAINT IF EXISTS shop_orders_payment_status_check;
 ALTER TABLE public.shop_orders

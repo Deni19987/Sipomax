@@ -81,7 +81,20 @@ export function verifyState(token: string): FortnoxState {
   return payload;
 }
 
+// Utan OAuth-uppgifterna finns det ingen integration att skicka användaren
+// till. Felet syns i gränssnittet, så det säger vad som saknas och vem som kan
+// åtgärda det — inte bara ett variabelnamn.
+export const FORTNOX_NOT_CONFIGURED_MESSAGE =
+  "Fortnox-integrationen är inte färdigkonfigurerad: FORTNOX_CLIENT_ID och FORTNOX_CLIENT_SECRET saknas i appens miljövariabler. Lägg till dem från er Fortnox-integration och försök igen.";
+
+export function assertFortnoxConfigured(): void {
+  if (!process.env.FORTNOX_CLIENT_ID || !process.env.FORTNOX_CLIENT_SECRET) {
+    throw new Error(FORTNOX_NOT_CONFIGURED_MESSAGE);
+  }
+}
+
 export function buildAuthorizeUrl(state: string, redirectUri: string): string {
+  assertFortnoxConfigured();
   const clientId = requireEnv("FORTNOX_CLIENT_ID");
   const url = new URL(FORTNOX_URLS.oauthAuthorize);
   url.searchParams.set("client_id", clientId);
