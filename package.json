@@ -9,7 +9,8 @@
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "screenshots": "node scripts/screenshots.mjs"
   },
   "dependencies": {
     "@block65/webcrypto-web-push": "^1.0.2",
