@@ -28,6 +28,15 @@ function ProductsPage() {
   const promo = getCampaign("product_promo");
 
   const activeCategory = kategori ? getCategory(kategori) : undefined;
+  // Ett kategorichip är ett filter, inte en ny sida: behåll skrollen och hoppa
+  // över sidövergången så att bara listan byts.
+  const selectCategory = (id: string | undefined) =>
+    navigate({
+      search: (prev) => ({ ...prev, kategori: id }),
+      replace: true,
+      resetScroll: false,
+      viewTransition: false,
+    });
   // Verkstadens egna publicerade produkter visas överst, följda av katalogen.
   const q_ = query.trim().toLowerCase();
   const matchingCustom = customProducts.filter(
@@ -60,14 +69,14 @@ function ProductsPage() {
           <CategoryChip
             label="Alla"
             active={!activeCategory}
-            onClick={() => navigate({ search: (prev) => ({ ...prev, kategori: undefined }) })}
+            onClick={() => selectCategory(undefined)}
           />
           {CATEGORIES.map((c) => (
             <CategoryChip
               key={c.id}
               label={c.name}
               active={activeCategory?.id === c.id}
-              onClick={() => navigate({ search: (prev) => ({ ...prev, kategori: c.id }) })}
+              onClick={() => selectCategory(c.id)}
             />
           ))}
         </div>
@@ -78,7 +87,8 @@ function ProductsPage() {
 
         {promo ? <CampaignBubble campaign={promo} /> : null}
 
-        <div className="space-y-3">
+        {/* min-h-lvh: en kortare träfflista ska aldrig tvinga upp skrollen. */}
+        <div className="space-y-3 min-h-lvh">
           {products.map((product) => (
             <ProductCard key={product.id} product={product} />
           ))}

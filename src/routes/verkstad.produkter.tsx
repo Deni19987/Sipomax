@@ -70,7 +70,8 @@ function WorkshopProductsPage() {
   return (
     <div className="space-y-4 px-4 pt-4 lg:pt-8">
       <h1 className="text-lg font-bold text-foreground lg:text-2xl">Produkter & kampanjer</h1>
-      <Tabs defaultValue="produkter">
+      {/* min-h-lvh: en kortare flik ska aldrig tvinga upp skrollen vid flikbyte. */}
+      <Tabs defaultValue="produkter" className="min-h-lvh">
         <TabsList className="grid w-full grid-cols-2 lg:w-80">
           <TabsTrigger value="produkter">Produkter</TabsTrigger>
           <TabsTrigger value="kampanjer">Kampanjer</TabsTrigger>
