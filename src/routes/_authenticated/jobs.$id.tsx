@@ -524,7 +524,10 @@ function JobDetailPage() {
         </div>
 
         {/* Center: tabs */}
-        <div ref={tabsRef} className="min-w-0 scroll-mt-4">
+        {/* min-h-lvh: a short tab must never make the page too short to keep
+            the current scroll position — otherwise the browser clamps and the
+            page jumps when switching tabs. */}
+        <div ref={tabsRef} className="min-w-0 scroll-mt-4 min-h-lvh">
           <Card>
             <Tabs
               value={activeTab}

@@ -187,6 +187,10 @@ function WorkshopOrdersPage() {
       to: "/verkstad",
       search: filtersToSearch({ ...filters, ...next }),
       replace: true,
+      // Vyflikar och filter byter listan, inte sidan: behåll skrollen och
+      // hoppa över sidövergången.
+      resetScroll: false,
+      viewTransition: false,
     });
   }
 
@@ -451,43 +455,47 @@ function OrderBoard({
         </div>
       )}
 
-      {isLoading ? (
-        <div className="rounded-xl bg-card p-8 text-center shadow-sm">
-          <p className="text-sm text-muted-foreground">Laddar beställningar…</p>
-        </div>
-      ) : visible.length > 0 ? (
-        <div className="overflow-hidden rounded-xl bg-card shadow-sm">
-          <OrderListHeader />
-          <OrderRows orders={visible} sort={filters.sort} />
-          <div className="border-t border-border px-4 py-2 text-[11px] text-muted-foreground">
-            {filters.view === "avklarad"
-              ? `Visar ${visible.length} av ${completedCount} avklarade beställningar`
-              : `Visar ${visible.length} av ${active.length} pågående beställningar`}
-            {filters.view !== "alla" ? ` · ${ORDER_VIEW_HINTS[filters.view]}` : ""}
+      {/* min-h-lvh: en kortare lista ska aldrig tvinga upp sidan när man byter
+          vyflik eller filter — då hoppar skrollen. */}
+      <div className="min-h-lvh">
+        {isLoading ? (
+          <div className="rounded-xl bg-card p-8 text-center shadow-sm">
+            <p className="text-sm text-muted-foreground">Laddar beställningar…</p>
           </div>
-        </div>
-      ) : (
-        <div className="rounded-xl bg-card p-8 text-center shadow-sm">
-          <Package className="mx-auto h-10 w-10 text-muted-foreground" />
-          <p className="mt-3 text-sm font-semibold text-card-foreground">
-            {active.length > 0 ? "Inga träffar" : "Inga pågående beställningar"}
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {active.length > 0
-              ? "Ingen beställning matchar filtren just nu."
-              : "När kunder skickar beställningar i butiken dyker de upp här."}
-          </p>
-          {active.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setFilters({ ...clearRefinements(filters), view: "alla" })}
-              className="mt-4 rounded-full bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground"
-            >
-              Rensa alla filter
-            </button>
-          )}
-        </div>
-      )}
+        ) : visible.length > 0 ? (
+          <div className="overflow-hidden rounded-xl bg-card shadow-sm">
+            <OrderListHeader />
+            <OrderRows orders={visible} sort={filters.sort} />
+            <div className="border-t border-border px-4 py-2 text-[11px] text-muted-foreground">
+              {filters.view === "avklarad"
+                ? `Visar ${visible.length} av ${completedCount} avklarade beställningar`
+                : `Visar ${visible.length} av ${active.length} pågående beställningar`}
+              {filters.view !== "alla" ? ` · ${ORDER_VIEW_HINTS[filters.view]}` : ""}
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-xl bg-card p-8 text-center shadow-sm">
+            <Package className="mx-auto h-10 w-10 text-muted-foreground" />
+            <p className="mt-3 text-sm font-semibold text-card-foreground">
+              {active.length > 0 ? "Inga träffar" : "Inga pågående beställningar"}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {active.length > 0
+                ? "Ingen beställning matchar filtren just nu."
+                : "När kunder skickar beställningar i butiken dyker de upp här."}
+            </p>
+            {active.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setFilters({ ...clearRefinements(filters), view: "alla" })}
+                className="mt-4 rounded-full bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground"
+              >
+                Rensa alla filter
+              </button>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

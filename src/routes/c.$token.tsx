@@ -196,7 +196,8 @@ function PortalView({ token, cred, onForget }: { token: string; cred: string; on
       </header>
 
       <main className="max-w-2xl mx-auto p-4">
-        <Tabs defaultValue="status">
+        {/* min-h-lvh: so switching to a shorter tab never clamps the scroll. */}
+        <Tabs defaultValue="status" className="min-h-lvh">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="status">Uppdateringar</TabsTrigger>
             <TabsTrigger value="chat">Chatt ({messages.length})</TabsTrigger>

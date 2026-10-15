@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AtSign, Hash, MessageSquare, SendHorizonal } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -44,9 +44,6 @@ export function useOrderChat(orderId: string | null) {
   });
 
   const bottomRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ block: "end" });
-  }, [messages?.length]);
 
   // Markera tråden som läst när den öppnas och när nya meddelanden landar,
   // så att olästmarkeringarna i orderlistan och trådlistan stämmer.
@@ -123,6 +120,30 @@ export function ChatMessageList({
   emptyHint?: string;
 }) {
   const { messages, isLoading, ownId, bottomRef } = chat;
+
+  // Visa senaste meddelandet när listan visas (även när man byter till
+  // Kommentarer-fliken) och när nya meddelanden landar. Har listan en egen
+  // scrollyta rullas bara den — scrollIntoView drog annars med hela sidan,
+  // så att sidan hoppade varje gång pollningen hämtade ett nytt meddelande.
+  useLayoutEffect(() => {
+    const bottom = bottomRef.current;
+    if (!bottom) return;
+    let el = bottom.parentElement;
+    while (el && el !== document.body) {
+      const { overflowY, maxHeight } = getComputedStyle(el);
+      // Räkna bara ytor som faktiskt är begränsade: en layoutbehållare med
+      // overflow-x-hidden får också overflow-y: auto men växer med sidan.
+      const scrollable = overflowY === "auto" || overflowY === "scroll";
+      if (scrollable && (maxHeight !== "none" || el.scrollHeight > el.clientHeight)) {
+        el.scrollTop = el.scrollHeight;
+        return;
+      }
+      el = el.parentElement;
+    }
+    // Ingen egen scrollyta (chattsidan på mobil växer med sidan): rulla sidan.
+    bottom.scrollIntoView({ block: "end" });
+  }, [messages?.length, isLoading, bottomRef]);
+
   return (
     <div className={cn("space-y-3", className)}>
       {isLoading ? (

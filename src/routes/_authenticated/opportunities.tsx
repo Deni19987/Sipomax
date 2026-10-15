@@ -199,8 +199,9 @@ function OpportunitiesPage() {
               emptyText = "Ingen historik ännu.";
             }
 
+            // min-h-lvh: so switching to a shorter tab never clamps the scroll.
             return (
-              <div className="space-y-3">
+              <div className="space-y-3 min-h-lvh">
                 {list.length > 0 ? (
                   <div className="grid gap-4">{list.map(renderCard)}</div>
                 ) : (
