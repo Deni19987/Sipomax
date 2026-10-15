@@ -201,6 +201,16 @@ function JobDetailPage() {
     if (!h) window.scrollTo(0, 0);
   }, [id]);
   const tabsRef = useRef<HTMLDivElement | null>(null);
+  // Scroll position captured when the user taps a tab. Restored before paint
+  // after the new tab renders, so the switch never moves the page (e.g. an
+  // autofocusing field in the new tab can't pull the view elsewhere).
+  const tabSwitchScrollRef = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    const y = tabSwitchScrollRef.current;
+    if (y == null) return;
+    tabSwitchScrollRef.current = null;
+    if (window.scrollY !== y) window.scrollTo(0, y);
+  }, [activeTab]);
   useEffect(() => {
     if (typeof window === "undefined") return;
     const onHash = () => {
@@ -519,11 +529,23 @@ function JobDetailPage() {
             <Tabs
               value={activeTab}
               onValueChange={(v) => {
+                if (typeof window !== "undefined") tabSwitchScrollRef.current = window.scrollY;
                 setActiveTab(v);
-                if (typeof window !== "undefined") {
-                  const newHash = v === "status" ? "" : `#${v}`;
-                  history.replaceState(null, "", window.location.pathname + window.location.search + newHash);
-                }
+                // Go through the router (not history.replaceState directly):
+                // the router observes history changes, and an untracked
+                // replace made it treat the switch as a new page — scroll to
+                // top plus a view-transition fade. Keep scroll and skip the
+                // animation so it just looks like a tab change.
+                navigate({
+                  to: "/jobs/$id",
+                  params: { id },
+                  search: (prev) => prev,
+                  hash: v === "status" ? undefined : v,
+                  replace: true,
+                  resetScroll: false,
+                  hashScrollIntoView: false,
+                  viewTransition: false,
+                });
               }}
             >
               <div className="border-b px-4 sm:px-6 overflow-x-auto">
