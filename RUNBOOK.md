@@ -20,7 +20,7 @@ so you don't repeat the same investigation.
 
 The Supabase anon/publishable key is baked into the Vite build at compile time
 (`VITE_SUPABASE_PUBLISHABLE_KEY`). It is NOT in any `.env` file in the repo —
-it lives in the Netlify/Lovable environment. You cannot read it from disk.
+it lives in the Netlify environment. You cannot read it from disk.
 The service role key (`SUPABASE_SERVICE_ROLE_KEY`) is also only available at
 runtime; never log it or return it in responses.
 
